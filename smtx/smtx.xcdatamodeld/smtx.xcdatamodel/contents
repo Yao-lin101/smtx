@@ -7,7 +7,7 @@
         <relationship name="templates" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Template" inverseName="languageSection" inverseEntity="Template"/>
     </entity>
     <entity name="Template" representedClassName=".Template" syncable="YES" codeGenerationType="class">
-        <attribute name="coverImageData" optional="YES" attributeType="Binary"/>
+        <attribute name="coverImageURL" optional="YES" attributeType="URI"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="title" optional="YES" attributeType="String"/>
@@ -18,7 +18,7 @@
     </entity>
     <entity name="TimelineItem" representedClassName=".TimelineItem" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="imageData" optional="YES" attributeType="Binary"/>
+        <attribute name="imageURL" optional="YES" attributeType="URI"/>
         <attribute name="script" optional="YES" attributeType="String"/>
         <attribute name="timestamp" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <relationship name="template" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Template" inverseName="timelineItems" inverseEntity="Template"/>
