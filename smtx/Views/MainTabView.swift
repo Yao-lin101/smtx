@@ -22,8 +22,8 @@ struct MainTabView: View {
                             LanguageSectionView(language: language)
                         case .templateDetail(let template):
                             TemplateDetailView(template: template)
-                        case .createTemplate(let language):
-                            CreateTemplateView(language: language)
+                        case .createTemplate(let language, let template):
+                            CreateTemplateView(language: language, existingTemplate: template)
                         case .recording(let template):
                             RecordingView(template: template)
                         case .recordDetail(let templateId, let record):
@@ -153,6 +153,10 @@ struct LocalTemplatesView: View {
     private func deleteLanguageSection(_ language: String) {
         TemplateStorage.shared.deleteLanguageSection(language)
         loadData()
+    }
+    
+    private func createTemplate(_ language: String) {
+        router.navigate(to: .createTemplate(language, nil))
     }
 }
 

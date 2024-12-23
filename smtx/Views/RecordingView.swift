@@ -3,7 +3,6 @@ import AVFoundation
 
 struct RecordingView: View {
     let template: TemplateFile
-    @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = AudioRecorder()
     @State private var currentTime: TimeInterval = 0
     @State private var timer: Timer?
@@ -50,32 +49,17 @@ struct RecordingView: View {
     private func startRecording() {
         do {
             try recorder.startRecording()
-            
-            // 开始计时
-            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                currentTime = recorder.currentTime
-            }
         } catch {
             print("Error starting recording: \(error)")
         }
     }
     
     private func stopRecording() {
-        timer?.invalidate()
-        timer = nil
-        
-        if recorder.isRecording {
-            do {
-                let audioData = try recorder.stopRecording()
-                _ = try TemplateStorage.shared.saveRecord(
-                    templateId: template.metadata.id,
-                    duration: currentTime,
-                    audioData: audioData
-                )
-                dismiss()
-            } catch {
-                print("Error stopping recording: \(error)")
-            }
+        do {
+            let recordData = try recorder.stopRecording()
+            currentTime = 0
+        } catch {
+            print("Error stopping recording: \(error)")
         }
     }
 }

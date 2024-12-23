@@ -3,27 +3,27 @@ import UIKit
 
 // MARK: - Models
 
-struct TemplateMetadata: Codable {
+struct TemplateMetadata: Codable, Hashable {
     let id: String
     let creator: Creator
     var createdAt: Date
     var updatedAt: Date
     var status: TemplateStatus
     
-    struct Creator: Codable {
+    struct Creator: Codable, Hashable {
         let type: CreatorType
         let id: String?
     }
 }
 
-struct TemplateData: Codable {
+struct TemplateData: Codable, Hashable {
     var title: String
     let language: String
-    let coverImage: String
+    var coverImage: String
     var totalDuration: Double
     var timelineItems: [TimelineItem]
     
-    struct TimelineItem: Codable, Identifiable {
+    struct TimelineItem: Codable, Identifiable, Hashable {
         let id: String
         let timestamp: Double
         let script: String
@@ -31,26 +31,34 @@ struct TemplateData: Codable {
     }
 }
 
-struct RecordData: Codable, Identifiable {
+struct RecordData: Codable, Identifiable, Hashable {
     let id: String
     let createdAt: Date
     let duration: Double
     let audioFile: String
 }
 
-struct TemplateFile: Codable {
+struct TemplateFile: Codable, Hashable {
     var version: String
     var metadata: TemplateMetadata
     var template: TemplateData
     var records: [RecordData]
+    
+    static func == (lhs: TemplateFile, rhs: TemplateFile) -> Bool {
+        return lhs.metadata.id == rhs.metadata.id
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(metadata.id)
+    }
 }
 
-enum CreatorType: String, Codable {
+enum CreatorType: String, Codable, Hashable {
     case local
     case user
 }
 
-enum TemplateStatus: String, Codable {
+enum TemplateStatus: String, Codable, Hashable {
     case local
     case synced
     case modified
@@ -198,7 +206,7 @@ class TemplateStorage {
         
         // 生成唯一标识符
         let itemId = UUID().uuidString
-        let timestamp = Int(timestamp * 1000) // 转换为毫秒
+        let timestamp = Int(timestamp * 1000) // 转换为毫���
         let filename = "\(timestamp)_\(itemId).jpg"
         
         // 保存图片

@@ -5,6 +5,7 @@ import CoreImage.CIFilterBuiltins
 
 struct CreateTemplateView: View {
     let language: String
+    let existingTemplate: TemplateFile?
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var selectedImage: PhotosPickerItem?
@@ -15,6 +16,11 @@ struct CreateTemplateView: View {
     @State private var showingCropper = false
     @State private var originalUIImage: UIImage?
     @State private var templateId: String?
+    
+    init(language: String, existingTemplate: TemplateFile? = nil) {
+        self.language = language
+        self.existingTemplate = existingTemplate
+    }
     
     var body: some View {
         NavigationView {
@@ -28,13 +34,13 @@ struct CreateTemplateView: View {
                     timelineItemsSection
                 }
             }
-            .navigationTitle("新建模板")
+            .navigationTitle(existingTemplate != nil ? "编辑模板" : "新建模板")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        // 如果已经创建了模板，需要删除它
-                        if let templateId = templateId {
+                        // 如果是新建模板且已经创建了模板ID，需要删除它
+                        if existingTemplate == nil, let templateId = templateId {
                             try? TemplateStorage.shared.deleteTemplate(templateId: templateId)
                         }
                         dismiss()
@@ -44,9 +50,9 @@ struct CreateTemplateView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        createTemplate()
+                        saveTemplate()
                     }) {
-                        Text("创建")
+                        Text(existingTemplate != nil ? "保存" : "创建")
                     }
                     .disabled(title.isEmpty || originalCoverImage == nil)
                 }
@@ -59,10 +65,90 @@ struct CreateTemplateView: View {
                     ImageCropperView(image: image) { croppedImage in
                         originalCoverImage = croppedImage
                         coverImage = Image(uiImage: croppedImage)
-                        createTemplateIfNeeded(with: croppedImage)
+                        if existingTemplate == nil {
+                            createTemplateIfNeeded(with: croppedImage)
+                        }
                     }
                 }
             }
+            .onAppear {
+                loadExistingTemplate()
+            }
+        }
+    }
+    
+    private func loadExistingTemplate() {
+        guard let template = existingTemplate else { return }
+        
+        // 加载模板数据
+        title = template.template.title
+        templateId = template.metadata.id
+        
+        // 加载封面图片
+        if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id),
+           let imageData = try? Data(contentsOf: baseURL.appendingPathComponent(template.template.coverImage)),
+           let uiImage = UIImage(data: imageData) {
+            originalCoverImage = uiImage
+            coverImage = Image(uiImage: uiImage)
+        }
+        
+        // 加载时间轴项目
+        timelineItems = template.template.timelineItems.map { item in
+            let imageURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id)?
+                .appendingPathComponent(item.image)
+            return TimelineItemData(
+                script: item.script,
+                imageURL: imageURL,
+                timestamp: item.timestamp
+            )
+        }
+    }
+    
+    private func saveTemplate() {
+        if existingTemplate != nil {
+            updateExistingTemplate()
+        } else {
+            createTemplate()
+        }
+        dismiss()
+    }
+    
+    private func updateExistingTemplate() {
+        guard let templateId = templateId,
+              let coverImage = originalCoverImage else { return }
+        
+        do {
+            var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+            
+            // 更新基本信息
+            template.template.title = title
+            template.metadata.updatedAt = Date()
+            
+            // 如果封面图片已更改，保存新的封面图片
+            if let imageData = coverImage.jpegData(compressionQuality: 0.8) {
+                let coverImageName = "cover.jpg"
+                if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
+                    try imageData.write(to: baseURL.appendingPathComponent(coverImageName))
+                    template.template.coverImage = coverImageName
+                }
+            }
+            
+            // 更新时间轴项目
+            template.template.timelineItems = timelineItems.map { item in
+                TemplateData.TimelineItem(
+                    id: item.id.uuidString,
+                    timestamp: item.timestamp,
+                    script: item.script,
+                    image: item.imageURL?.lastPathComponent ?? ""
+                )
+            }
+            
+            // 更新总时长
+            template.template.totalDuration = timelineItems.map { $0.timestamp }.max() ?? 0
+            
+            try TemplateStorage.shared.saveTemplate(template)
+        } catch {
+            print("Error updating template: \(error)")
         }
     }
     

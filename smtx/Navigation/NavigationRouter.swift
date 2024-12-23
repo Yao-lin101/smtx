@@ -3,9 +3,9 @@ import SwiftUI
 enum Route: Hashable {
     case languageSection(String)
     case templateDetail(TemplateFile)
-    case createTemplate(String)
-    case recordDetail(templateId: String, record: RecordData)
+    case createTemplate(String, TemplateFile? = nil)
     case recording(TemplateFile)
+    case recordDetail(String, RecordData)
     
     func hash(into hasher: inout Hasher) {
         switch self {
@@ -15,16 +15,17 @@ enum Route: Hashable {
         case .templateDetail(let template):
             hasher.combine(1)
             hasher.combine(template.metadata.id)
-        case .createTemplate(let language):
+        case .createTemplate(let language, let template):
             hasher.combine(2)
             hasher.combine(language)
-        case .recordDetail(let templateId, let record):
+            hasher.combine(template)
+        case .recording(let template):
             hasher.combine(3)
+            hasher.combine(template.metadata.id)
+        case .recordDetail(let templateId, let record):
+            hasher.combine(4)
             hasher.combine(templateId)
             hasher.combine(record.id)
-        case .recording(let template):
-            hasher.combine(4)
-            hasher.combine(template.metadata.id)
         }
     }
     
@@ -34,12 +35,12 @@ enum Route: Hashable {
             return l == r
         case (.templateDetail(let l), .templateDetail(let r)):
             return l.metadata.id == r.metadata.id
-        case (.createTemplate(let l), .createTemplate(let r)):
-            return l == r
-        case (.recordDetail(let l1, let l2), .recordDetail(let r1, let r2)):
-            return l1 == r1 && l2.id == r2.id
+        case (.createTemplate(let l1, let l2), .createTemplate(let r1, let r2)):
+            return l1 == r1 && l2 == r2
         case (.recording(let l), .recording(let r)):
             return l.metadata.id == r.metadata.id
+        case (.recordDetail(let l1, let l2), .recordDetail(let r1, let r2)):
+            return l1 == r1 && l2.id == r2.id
         default:
             return false
         }
