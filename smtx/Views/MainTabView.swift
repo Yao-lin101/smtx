@@ -26,8 +26,8 @@ struct MainTabView: View {
                             CreateTemplateView(language: language)
                         case .recording(let template):
                             RecordingView(template: template)
-                        case .recordDetail(let record):
-                            RecordDetailView(record: record)
+                        case .recordDetail(let templateId, let record):
+                            RecordDetailView(record: record, templateId: templateId)
                         }
                     }
             }
@@ -65,36 +65,30 @@ struct PlaceholderView: View {
 
 // 本地模板主页面
 struct LocalTemplatesView: View {
-    @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject private var router: NavigationRouter
     @State private var showingLanguageInput = false
     @State private var newLanguage = ""
     @State private var showingDeleteAlert = false
     @State private var languageToDelete: String?
-    
-    // 获取所有语言分区
-    @FetchRequest(
-        entity: LanguageSection.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \LanguageSection.name, ascending: true)],
-        animation: .default)
-    private var sections: FetchedResults<LanguageSection>
+    @State private var templatesByLanguage: [String: [TemplateFile]] = [:]
+    @State private var languageSections: [String] = []
     
     var body: some View {
         List {
-            ForEach(sections) { section in
-                NavigationLink(value: Route.languageSection(section.name ?? "")) {
+            ForEach(languageSections, id: \.self) { language in
+                NavigationLink(value: Route.languageSection(language)) {
                     HStack {
-                        Text(section.name ?? "")
+                        Text(language)
                             .font(.title3)
                         Spacer()
-                        Text("\((section.templates?.count ?? 0))")
+                        Text("\(templatesByLanguage[language]?.count ?? 0)")
                             .foregroundColor(.secondary)
                     }
                     .padding(.vertical, 8)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
-                        languageToDelete = section.name
+                        languageToDelete = language
                         showingDeleteAlert = true
                     } label: {
                         Label("删除", systemImage: "trash")
@@ -134,28 +128,31 @@ struct LocalTemplatesView: View {
                 Text("确定要删除「\(language)」分区吗？该分区下的所有模板都将被删除。")
             }
         }
+        .onAppear {
+            loadData()
+        }
+    }
+    
+    private func loadData() {
+        // 加载语言分区
+        languageSections = TemplateStorage.shared.getLanguageSections()
+        
+        // 加载模板
+        do {
+            templatesByLanguage = try TemplateStorage.shared.listTemplatesByLanguage()
+        } catch {
+            print("Error loading templates: \(error)")
+        }
     }
     
     private func addLanguageSection(_ name: String) {
-        let section = LanguageSection(context: viewContext)
-        section.id = UUID()
-        section.name = name
-        section.createdAt = Date()
-        
-        do {
-            try viewContext.save()
-        } catch {
-            print("Error adding language section: \(error)")
-        }
+        TemplateStorage.shared.addLanguageSection(name)
+        loadData()
     }
     
-    private func deleteLanguageSection(_ name: String) {
-        withAnimation {
-            if let section = sections.first(where: { $0.name == name }) {
-                viewContext.delete(section)
-                try? viewContext.save()
-            }
-        }
+    private func deleteLanguageSection(_ language: String) {
+        TemplateStorage.shared.deleteLanguageSection(language)
+        loadData()
     }
 }
 
@@ -163,6 +160,5 @@ struct LocalTemplatesView: View {
 struct MainTabView_Previews: PreviewProvider {
     static var previews: some View {
         MainTabView()
-            .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }
 } 

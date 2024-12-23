@@ -1,34 +1,22 @@
 import SwiftUI
-import CoreData
 
 struct LanguageSectionView: View {
     let language: String
-    @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject private var router: NavigationRouter
-    
-    @FetchRequest private var templates: FetchedResults<Template>
-    
-    init(language: String) {
-        self.language = language
-        _templates = FetchRequest(
-            entity: Template.entity(),
-            sortDescriptors: [NSSortDescriptor(keyPath: \Template.createdAt, ascending: false)],
-            predicate: NSPredicate(format: "languageSection.name == %@", language)
-        )
-    }
+    @State private var templates: [TemplateFile] = []
     
     var body: some View {
         List {
-            ForEach(templates) { template in
+            ForEach(templates, id: \.metadata.id) { template in
                 NavigationLink(value: Route.templateDetail(template)) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(template.title ?? "未命名模板")
+                        Text(template.template.title)
                             .font(.headline)
                         
                         HStack {
-                            Text("时长：\(template.totalDuration, specifier: "%.1f")秒")
+                            Text("时长：\(template.template.totalDuration, specifier: "%.1f")秒")
                             Spacer()
-                            Text(template.createdAt ?? Date(), style: .date)
+                            Text(template.metadata.createdAt, style: .date)
                         }
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -46,12 +34,33 @@ struct LanguageSectionView: View {
                 }
             }
         }
+        .onAppear {
+            loadTemplates()
+        }
+    }
+    
+    private func loadTemplates() {
+        do {
+            let allTemplates = try TemplateStorage.shared.listTemplates()
+            templates = allTemplates
+                .filter { $0.template.language == language }
+                .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+        } catch {
+            print("Error loading templates: \(error)")
+        }
     }
     
     private func deleteTemplates(offsets: IndexSet) {
         withAnimation {
-            offsets.map { templates[$0] }.forEach(viewContext.delete)
-            try? viewContext.save()
+            for index in offsets {
+                let template = templates[index]
+                do {
+                    try TemplateStorage.shared.deleteTemplate(templateId: template.metadata.id)
+                } catch {
+                    print("Error deleting template: \(error)")
+                }
+            }
+            loadTemplates()
         }
     }
 }
@@ -59,7 +68,6 @@ struct LanguageSectionView: View {
 #Preview {
     NavigationStack {
         LanguageSectionView(language: "日语")
-            .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
             .environmentObject(NavigationRouter())
     }
 } 

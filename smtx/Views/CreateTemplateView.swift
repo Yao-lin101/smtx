@@ -1,110 +1,104 @@
 import SwiftUI
-import CoreData
 import PhotosUI
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
 struct CreateTemplateView: View {
     let language: String
-    @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var selectedImage: PhotosPickerItem?
     @State private var coverImage: Image?
-    @State private var coverImageURL: URL?
+    @State private var originalCoverImage: UIImage?
     @State private var timelineItems: [TimelineItemData] = []
-    @State private var showingImagePicker = false
     @State private var showingTimelineEditor = false
     @State private var showingCropper = false
     @State private var originalUIImage: UIImage?
+    @State private var templateId: String?
     
     var body: some View {
         NavigationView {
             Form {
                 Section("基本信息") {
                     TextField("模板标题", text: $title)
-                    
-                    // 封面图片选择
-                    VStack(alignment: .leading) {
-                        Text("封面图片")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        PhotosPicker(selection: $selectedImage,
-                                   matching: .images,
-                                   photoLibrary: .shared()) {
-                            if let coverImage = coverImage {
-                                coverImage
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(height: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            } else {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.secondary.opacity(0.2))
-                                    .frame(height: 200)
-                                    .overlay {
-                                        Image(systemName: "photo")
-                                            .font(.largeTitle)
-                                            .foregroundColor(.secondary)
-                                    }
-                            }
-                        }
-                        .onChange(of: selectedImage) { oldValue, newValue in
-                            Task {
-                                if let data = try? await newValue?.loadTransferable(type: Data.self) {
-                                    if let uiImage = UIImage(data: data) {
-                                        originalUIImage = uiImage
-                                        showingCropper = true
-                                        // 清除选择，这样下次选择同一张图片也会触发
-                                        selectedImage = nil
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    coverImageSection
                 }
                 
                 Section("时间轴项目") {
-                    if timelineItems.isEmpty {
-                        Text("点击下方按钮添加时间轴项目")
-                            .foregroundColor(.secondary)
-                    } else {
-                        ForEach(timelineItems) { item in
-                            TimelineItemRow(item: item)
-                        }
-                        .onDelete(perform: deleteTimelineItem)
-                    }
-                    
-                    Button(action: { showingTimelineEditor = true }) {
-                        Label("添加时间轴项目", systemImage: "plus.circle.fill")
-                    }
+                    timelineItemsSection
                 }
             }
             .navigationTitle("新建模板")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        // 如果已经创建了模板，需要删除它
+                        if let templateId = templateId {
+                            try? TemplateStorage.shared.deleteTemplate(templateId: templateId)
+                        }
                         dismiss()
+                    }) {
+                        Text("取消")
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("创建") {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
                         createTemplate()
+                    }) {
+                        Text("创建")
                     }
-                    .disabled(title.isEmpty)
+                    .disabled(title.isEmpty || originalCoverImage == nil)
                 }
             }
             .sheet(isPresented: $showingTimelineEditor) {
-                TimelineEditorView(timelineItems: $timelineItems)
+                TimelineEditorView(templateId: templateId ?? "", timelineItems: $timelineItems)
             }
             .sheet(isPresented: $showingCropper) {
                 if let image = originalUIImage {
                     ImageCropperView(image: image) { croppedImage in
-                        if let url = FileManagerService.shared.saveImage(croppedImage) {
-                            coverImageURL = url
-                            coverImage = Image(uiImage: croppedImage)
+                        originalCoverImage = croppedImage
+                        coverImage = Image(uiImage: croppedImage)
+                        createTemplateIfNeeded(with: croppedImage)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var coverImageSection: some View {
+        VStack(alignment: .leading) {
+            Text("封面图片")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            PhotosPicker(selection: $selectedImage,
+                       matching: .images,
+                       photoLibrary: .shared()) {
+                if let coverImage = coverImage {
+                    coverImage
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 200)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .font(.largeTitle)
+                                .foregroundColor(.secondary)
+                        }
+                }
+            }
+            .onChange(of: selectedImage) { newValue in
+                Task {
+                    if let data = try? await newValue?.loadTransferable(type: Data.self) {
+                        if let uiImage = UIImage(data: data) {
+                            originalUIImage = uiImage
+                            showingCropper = true
+                            selectedImage = nil
                         }
                     }
                 }
@@ -112,51 +106,77 @@ struct CreateTemplateView: View {
         }
     }
     
+    private var timelineItemsSection: some View {
+        Group {
+            if timelineItems.isEmpty {
+                Text("点击下方按钮添加时间轴项目")
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(timelineItems) { item in
+                    TimelineItemRow(item: item)
+                }
+                .onDelete(perform: deleteTimelineItem)
+            }
+            
+            Button(action: { showingTimelineEditor = true }) {
+                Label("添加时间轴项目", systemImage: "plus.circle.fill")
+            }
+        }
+    }
+    
+    private func createTemplateIfNeeded(with image: UIImage) {
+        if templateId == nil {
+            do {
+                templateId = try TemplateStorage.shared.createTemplate(
+                    title: title,
+                    language: language,
+                    coverImage: image
+                )
+            } catch {
+                print("Error creating template: \(error)")
+            }
+        }
+    }
+    
     private func deleteTimelineItem(at offsets: IndexSet) {
         timelineItems.remove(atOffsets: offsets)
+        
+        // 更新模板的时间轴项目
+        if let templateId = templateId {
+            do {
+                var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+                template.template.timelineItems = timelineItems.map { item in
+                    TemplateData.TimelineItem(
+                        id: item.id.uuidString,
+                        timestamp: item.timestamp,
+                        script: item.script,
+                        image: item.imageURL?.lastPathComponent ?? ""
+                    )
+                }
+                template.metadata.updatedAt = Date()
+                try TemplateStorage.shared.saveTemplate(template)
+            } catch {
+                print("Error updating template: \(error)")
+            }
+        }
     }
     
     private func createTemplate() {
-        // 先获取或创建对应的语言分区
-        let fetchRequest: NSFetchRequest<LanguageSection> = LanguageSection.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "name == %@", language)
+        guard let templateId = templateId else { return }
         
         do {
-            let section: LanguageSection
-            if let existingSection = try viewContext.fetch(fetchRequest).first {
-                section = existingSection
-            } else {
-                section = LanguageSection(context: viewContext)
-                section.id = UUID()
-                section.name = language
-                section.createdAt = Date()
-            }
+            var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+            template.template.title = title
+            template.metadata.updatedAt = Date()
             
-            // 创建新模板
-            let template = Template(context: viewContext)
-            template.id = UUID()
-            template.title = title
-            template.createdAt = Date()
-            template.languageSection = section
-            template.coverImageURL = coverImageURL
+            // 更新总时长
+            let totalDuration = timelineItems.map { $0.timestamp }.max() ?? 0
+            template.template.totalDuration = totalDuration
             
-            // 创建时间轴项目
-            var totalDuration: Double = 0
-            for itemData in timelineItems {
-                let item = TimelineItem(context: viewContext)
-                item.id = UUID()
-                item.script = itemData.script
-                item.imageURL = itemData.imageURL
-                item.timestamp = itemData.timestamp
-                item.template = template
-                totalDuration = max(totalDuration, itemData.timestamp)
-            }
-            template.totalDuration = totalDuration
-            
-            try viewContext.save()
+            try TemplateStorage.shared.saveTemplate(template)
             dismiss()
         } catch {
-            print("Error creating template: \(error)")
+            print("Error updating template: \(error)")
         }
     }
 }
@@ -289,14 +309,18 @@ struct ImageCropperView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
                         dismiss()
+                    }) {
+                        Text("取消")
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
                         cropImage()
+                    }) {
+                        Text("完成")
                     }
                 }
             }
@@ -345,10 +369,7 @@ struct ImageCropperView: View {
             image.draw(in: drawRect)
         }
         
-        // 保存裁剪后的图片
-        if let imageURL = FileManagerService.shared.saveImage(croppedImage) {
-            onCrop(croppedImage)
-        }
+        onCrop(croppedImage)
         dismiss()
     }
 }
@@ -393,13 +414,18 @@ struct TimelineItemRow: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let imageURL = item.imageURL,
-               let image = FileManagerService.shared.loadImage(from: imageURL) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            if let imageURL = item.imageURL {
+                AsyncImage(url: imageURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 100)
+                }
             }
             
             Text(item.script)
@@ -415,13 +441,15 @@ struct TimelineItemRow: View {
 
 // 时间轴编辑器视图
 struct TimelineEditorView: View {
+    let templateId: String
     @Environment(\.dismiss) private var dismiss
     @Binding var timelineItems: [TimelineItemData]
     @State private var script = ""
     @State private var timestamp = ""
     @State private var selectedImage: PhotosPickerItem?
-    @State private var imageURL: URL?
     @State private var previewImage: Image?
+    @State private var originalImage: UIImage?
+    @State private var hasImage = false
     
     var body: some View {
         NavigationView {
@@ -462,35 +490,60 @@ struct TimelineEditorView: View {
             .navigationTitle("添加时间轴项目")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
                         dismiss()
+                    }) {
+                        Text("取消")
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
-                        if let time = Double(timestamp), !script.isEmpty {
-                            let item = TimelineItemData(
-                                script: script,
-                                imageURL: imageURL,
-                                timestamp: time
-                            )
-                            timelineItems.append(item)
-                            timelineItems.sort { $0.timestamp < $1.timestamp }
-                            dismiss()
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        if let time = Double(timestamp),
+                           !script.isEmpty,
+                           let image = originalImage {
+                            Task(priority: .userInitiated) {
+                                do {
+                                    let itemId = try TemplateStorage.shared.saveTimelineItem(
+                                        templateId: templateId,
+                                        timestamp: time,
+                                        script: script,
+                                        image: image
+                                    )
+                                    
+                                    // 加载模板以获取新的时间轴项目URL
+                                    let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+                                    if let item = template.template.timelineItems.last,
+                                       let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
+                                        let imageURL = baseURL.appendingPathComponent(item.image)
+                                        let timelineItem = TimelineItemData(
+                                            script: script,
+                                            imageURL: imageURL,
+                                            timestamp: time
+                                        )
+                                        timelineItems.append(timelineItem)
+                                        timelineItems.sort { $0.timestamp < $1.timestamp }
+                                    }
+                                    dismiss()
+                                } catch {
+                                    print("Error saving timeline item: \(error)")
+                                }
+                            }
                         }
+                    }) {
+                        Text("添加")
                     }
-                    .disabled(script.isEmpty || timestamp.isEmpty)
+                    .disabled(script.isEmpty || timestamp.isEmpty || !hasImage)
                 }
             }
-            .onChange(of: selectedImage) { oldValue, newValue in
+            .onChange(of: selectedImage) { newValue in
                 Task {
                     if let data = try? await newValue?.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
-                        if let url = FileManagerService.shared.saveImage(uiImage) {
-                            imageURL = url
-                            previewImage = Image(uiImage: uiImage)
-                        }
+                        originalImage = uiImage
+                        previewImage = Image(uiImage: uiImage)
+                        hasImage = true
+                        selectedImage = nil
                     }
                 }
             }

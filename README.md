@@ -18,24 +18,24 @@ SMTX 是一个专注于语言学习的 iOS 应用，允许用户创建和管理�
    - 支持删除模板
    - 按时间倒序排列展示
 
-### 待实现功能
-
-1. **模板制作**
+3. **模板制作**
    - 添加时间轴
    - 插入图片和台词
    - 设置播放时间
    - 添加分类标签
 
-2. **跟读功能**
+4. **跟读功能**
    - 录音功能
    - 暂停和取消支持
    - 本地保存录音
 
-3. **云同步功能**（预留）
+### 待实现功能
+
+1. **云同步功能**（预留）
    - 模板云端存储
    - 用户系统
 
-4. **社交功能**（预留）
+2. **社交功能**（预留）
    - 评论功能
    - 分享录音
    - 点赞功能
@@ -45,85 +45,82 @@ SMTX 是一个专注于语言学习的 iOS 应用，允许用户创建和管理�
 ### 核心技术
 
 - **Swift** 和 **SwiftUI** 用于 UI 开发
-- **CoreData** 用于本地数据存储
-- **AVFoundation**（待实现）用于音频处理
+- **JSON** 用于模板数据存储
+- **AVFoundation** 用于音频处理
 - **FileManager** 用于文件管理
 
-### 数据模型
+### 存储架构
 
-1. **LanguageSection（语言分区）**
-   - id: UUID
-   - name: String
-   - createdAt: Date
-   - templates: [Template]
-
-2. **Template（模板）**
-   - id: UUID
-   - title: String
-   - createdAt: Date
-   - coverImageData: Binary
-   - totalDuration: Double
-   - languageSection: LanguageSection
-   - timelineItems: [TimelineItem]
-   - records: [VoiceRecord]
-
-3. **TimelineItem（时间轴项目）**
-   - id: UUID
-   - imageData: Binary
-   - script: String
-   - timestamp: Double
-   - template: Template
-
-4. **VoiceRecord（录音记录）**
-   - id: UUID
-   - audioFileURL: URL
-   - createdAt: Date
-   - duration: Double
-   - template: Template
-
-### 项目结构 
-
+#### 文件系统结构
 ```
-smtx/
-├── smtxApp.swift              # 应用入口
-├── ContentView.swift          # 主内容视图
-├── Persistence.swift          # Core Data 持久化管理
-├── smtx.xcdatamodeld/        # Core Data 数据模型
-│   └── smtx.xcdatamodel/
-├── Navigation/               # 导航管理
-│   └── NavigationRouter.swift
-├── Views/                    # 视图组件
-│   ├── MainTabView.swift     # 主标签视图
-│   ├── LanguageSectionView.swift
-│   ├── TemplateDetailView.swift
-│   ├── CreateTemplateView.swift
-│   ├── RecordingView.swift
-│   └── RecordDetailView.swift
-├── ViewModels/              # 视图模型
-│   └── TemplateViewModel.swift
-└── Utilities/               # 工具类
-    └── FileManager.swift
+Templates/
+    ├── local_{template-uuid}/           # 本地模板（未登录用户）
+    │   ├── template.json               # 模板数据
+    │   ├── cover.jpg                  # 封面图片
+    │   ├── images/                    # 时间轴图片
+    │   │   ├── {timestamp}_{uuid}.jpg
+    │   │   └── ...
+    │   └── records/                   # 录音文件
+    │       ├── {timestamp}_{uuid}.m4a
+    │       └── ...
+    └── {uid}_{template-uuid}/          # 用户模板（已登录用户）
+        ├── template.json
+        └── ...
 ```
 
-## 主要组件说明
+#### 模板数据结构 (template.json)
+```json
+{
+    "version": "1.0",
+    "metadata": {
+        "id": "template-uuid",
+        "creator": {
+            "type": "local",           // "local" 或 "user"
+            "id": "uid或null"          // 本地用户为null
+        },
+        "createdAt": "ISO8601时间",
+        "updatedAt": "ISO8601时间",
+        "status": "local"             // "local", "synced", "modified"
+    },
+    "template": {
+        "title": "模板标题",
+        "language": "语言",
+        "coverImage": "cover.jpg",
+        "totalDuration": 10.5,
+        "timelineItems": [
+            {
+                "id": "uuid",
+                "timestamp": 1.5,
+                "script": "台词内容",
+                "image": "images/1234567890_uuid.jpg"
+            }
+        ]
+    },
+    "records": [
+        {
+            "id": "uuid",
+            "createdAt": "ISO8601时间",
+            "duration": 10.5,
+            "audioFile": "records/1234567890_uuid.m4a"
+        }
+    ]
+}
+```
 
-### 1. 导航系统
-- `NavigationRouter`: 管理应用内导航和路由
-- 实现标签页导航和视图堆栈管理
-- 支持模态视图展示
+### 命名规范
 
-### 2. 视图层级
-- `MainTabView`: 底部标签栏，包含云端模板、本地模板和个人中心
-- `LanguageSectionView`: 语言分区列表和管理
-- `TemplateDetailView`: 模板详情和编辑
-- `CreateTemplateView`: 新建模板界面
-- `RecordingView`: 录音界面
-- `RecordDetailView`: 录音回放和管理
+1. **模板文件夹**
+   - 本地模板：`local_{template-uuid}`
+   - 用户模板：`{uid}_{template-uuid}`
 
-### 3. 数据管理
-- Core Data 实现本地数据持久化
-- `FileManager` 处理音频文件和图片存储
-- `TemplateViewModel` 管理模板相关业务逻辑
+2. **资源文件**
+   - 封面图片：`cover.jpg`
+   - 时间轴图片：`{timestamp}_{uuid}.jpg`
+   - 录音文件：`{timestamp}_{uuid}.m4a`
+
+3. **相对路径**
+   - 所有文件引用使用相对路径
+   - 路径相对于模板根目录
 
 ## 开发环境
 
@@ -137,7 +134,7 @@ smtx/
 1. 克隆项目到本地
 2. 使用 Xcode 打开 `smtx.xcodeproj`
 3. 选择目标设备或模拟器
-4. 点击运行按钮或按下 `Cmd + R`
+4. 点击运行按���或按下 `Cmd + R`
 
 ## 开发计划
 
@@ -146,10 +143,11 @@ smtx/
 - [x] 语言分区管理
 - [x] 本地模板管理
 
-### 第二阶段（进行中）
-- [ ] 模板制作功能
-- [ ] 录音和回放功能
-- [ ] 文件管理优化
+### 第二阶段（已完成）
+- [x] JSON 模板存储实现
+- [x] 模板制作功能
+- [x] 录音和回放功能
+- [x] 文件管理优化
 
 ### 第三阶段（计划中）
 - [ ] 云端同步
