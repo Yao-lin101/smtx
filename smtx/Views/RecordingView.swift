@@ -6,58 +6,88 @@ struct RecordingView: View {
     @StateObject private var recorder = AudioRecorder()
     @State private var currentTime: TimeInterval = 0
     @State private var timer: Timer?
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        List {
-            Section {
-                ForEach(template.template.timelineItems, id: \.id) { item in
-                    TimelineItemView(templateId: template.metadata.id, item: item)
-                }
-            }
+        VStack(spacing: 24) {
+            // 时间轴预览
+            TimelinePreviewView(
+                timelineItems: template.template.timelineItems.map { item in
+                    TimelineItemData(
+                        script: item.script,
+                        imageURL: getImageURL(for: item),
+                        timestamp: item.timestamp
+                    )
+                },
+                totalDuration: template.template.totalDuration
+            )
+            .padding(.horizontal)
             
-            Section {
-                HStack {
-                    Text(String(format: "%.1f秒", currentTime))
-                        .font(.title2)
-                        .monospacedDigit()
-                    
-                    Spacer()
-                    
-                    if recorder.isRecording {
-                        Button(action: stopRecording) {
-                            Image(systemName: "stop.circle.fill")
-                                .font(.title)
-                                .foregroundColor(.red)
-                        }
-                    } else {
-                        Button(action: startRecording) {
-                            Image(systemName: "record.circle")
-                                .font(.title)
-                                .foregroundColor(.red)
-                        }
-                    }
+            // 录音控制面板
+            VStack(spacing: 16) {
+                Text(String(format: "%.1f", currentTime))
+                    .font(.system(size: 48, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+                
+                // 录音按钮
+                Button(action: recorder.isRecording ? stopRecording : startRecording) {
+                    Image(systemName: recorder.isRecording ? "stop.circle.fill" : "record.circle.fill")
+                        .font(.system(size: 64))
+                        .foregroundColor(.red)
                 }
-                .padding(.vertical, 8)
             }
+            .padding(32)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+            .padding()
         }
         .navigationTitle("录音")
+        .navigationBarTitleDisplayMode(.inline)
         .onDisappear {
             stopRecording()
         }
     }
     
+    private func getImageURL(for item: TemplateData.TimelineItem) -> URL? {
+        guard !item.image.isEmpty,
+              let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
+            return nil
+        }
+        let url = baseURL.appendingPathComponent(item.image)
+        // 确保文件存在
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+        return url
+    }
+    
     private func startRecording() {
         do {
             try recorder.startRecording()
+            // 启动计时器
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                currentTime = recorder.currentTime
+            }
         } catch {
             print("Error starting recording: \(error)")
         }
     }
     
     private func stopRecording() {
+        guard recorder.isRecording else { return }
+        
         do {
-            _ = try recorder.stopRecording()
+            let recordData = try recorder.stopRecording()
+            // TODO: 保存录音数据
+            
+            // 停止并清除计时器
+            timer?.invalidate()
+            timer = nil
             currentTime = 0
+            
+            // 返回上一页
+            dismiss()
         } catch {
             print("Error stopping recording: \(error)")
         }
