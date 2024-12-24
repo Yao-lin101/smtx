@@ -138,7 +138,7 @@ struct TimelineEditorView: View {
             }
             .sheet(isPresented: $showingCropper) {
                 if let image = tempUIImage {
-                    ImageCropperView(image: image) { croppedImage in
+                    ImageCropperView(image: image, aspectRatio: 16/9) { croppedImage in
                         originalImage = croppedImage
                         previewImage = Image(uiImage: croppedImage)
                     }
