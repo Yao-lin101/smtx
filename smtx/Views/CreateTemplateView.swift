@@ -18,6 +18,8 @@ struct CreateTemplateView: View {
     @State private var templateId: String?
     @State private var selectedMinutes = 0
     @State private var selectedSeconds = 5
+    @State private var tags: [String] = []
+    @State private var newTag = ""
     
     private let minutesRange = 0...10 // 0-10分钟
     private let secondsRange = 0...59 // 0-59秒
@@ -36,6 +38,9 @@ struct CreateTemplateView: View {
                     
                     // 标题输入
                     titleSection
+                    
+                    // 标签编辑
+                    tagsSection
                     
                     // 时长选择器（包含时间轴按钮）
                     durationSection
@@ -138,6 +143,7 @@ struct CreateTemplateView: View {
         // 加载模板数据
         title = template.template.title
         templateId = template.metadata.id
+        tags = template.template.tags
         
         // 设置时长
         let duration = template.template.totalDuration
@@ -182,6 +188,7 @@ struct CreateTemplateView: View {
             template.template.title = title
             template.metadata.updatedAt = Date()
             template.template.totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
+            template.template.tags = tags
             
             // 保存封面图片
             if let coverImage = originalCoverImage,
@@ -351,6 +358,49 @@ struct CreateTemplateView: View {
             .aspectRatio(4/3, contentMode: .fit)
         }
     }
+    
+    private var tagsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("标签")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            // 已添加的标签
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(tags, id: \.self) { tag in
+                        TagView(tag: tag) {
+                            // 删除标签
+                            if let index = tags.firstIndex(of: tag) {
+                                tags.remove(at: index)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 添加新标签
+            HStack {
+                TextField("添加标签", text: $newTag)
+                    .textFieldStyle(.roundedBorder)
+                    .submitLabel(.done)
+                
+                Button(action: addTag) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.accentColor)
+                }
+                .disabled(newTag.isEmpty)
+            }
+        }
+    }
+    
+    private func addTag() {
+        let tag = newTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tag.isEmpty && !tags.contains(tag) {
+            tags.append(tag)
+            newTag = ""
+        }
+    }
 }
 
 // 时间轴项目数据模型
@@ -359,4 +409,27 @@ struct TimelineItemData: Identifiable {
     var script: String
     var imageURL: URL?
     var timestamp: Double
+}
+
+// 标签视图组件
+private struct TagView: View {
+    let tag: String
+    let onDelete: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(tag)
+                .font(.subheadline)
+            
+            Button(action: onDelete) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.1))
+        .foregroundColor(.accentColor)
+        .clipShape(Capsule())
+    }
 }

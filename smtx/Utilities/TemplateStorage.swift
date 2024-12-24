@@ -22,12 +22,34 @@ struct TemplateMetadata: Codable, Hashable {
     }
 }
 
-struct TemplateData: Codable, Hashable {
+struct TemplateData: Codable {
     var title: String
     let language: String
     var coverImage: String
     var totalDuration: Double
     var timelineItems: [TimelineItem]
+    var tags: [String]
+    
+    init(title: String, language: String, coverImage: String, totalDuration: Double = 5.0) {
+        self.title = title
+        self.language = language
+        self.coverImage = coverImage
+        self.totalDuration = totalDuration
+        self.timelineItems = []
+        self.tags = []
+    }
+    
+    // 添加自定义解码方法以处理缺失的 tags 字段
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decode(String.self, forKey: .title)
+        language = try container.decode(String.self, forKey: .language)
+        coverImage = try container.decode(String.self, forKey: .coverImage)
+        totalDuration = try container.decode(Double.self, forKey: .totalDuration)
+        timelineItems = try container.decode([TimelineItem].self, forKey: .timelineItems)
+        // 如果 tags 字段不存在，使用空数组作为默认值
+        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+    }
     
     struct TimelineItem: Codable, Identifiable, Hashable {
         let id: String
@@ -190,8 +212,7 @@ class TemplateStorage {
                 title: title,
                 language: language,
                 coverImage: "cover.jpg",
-                totalDuration: 0,
-                timelineItems: []
+                totalDuration: 0
             ),
             records: []
         )
@@ -246,7 +267,7 @@ class TemplateStorage {
         )
         template.metadata.updatedAt = Date()
         
-        // 保存更新后的模板数据
+        // 保存更新后的模板���据
         let jsonData = try encoder.encode(template)
         try jsonData.write(to: templateDir.appendingPathComponent("template.json"))
         
