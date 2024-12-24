@@ -53,18 +53,25 @@ private struct TimelinePreviewItem: View {
                     }
             }
             
-            // 时间点和台词预览
+            // 台词和时间点预览
             VStack(alignment: .leading, spacing: 2) {
-                Text(String(format: "%.1f秒", item.timestamp))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
                 if !item.script.isEmpty {
                     Text(item.script)
                         .font(.caption)
                         .lineLimit(2)
-                        .frame(width: 120)
+                        .frame(width: 120, alignment: .leading)
                 }
+                Text(formatTimestamp(item.timestamp))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 120, alignment: .center)
             }
         }
+    }
+    
+    private func formatTimestamp(_ timestamp: Double) -> String {
+        let minutes = Int(timestamp) / 60
+        let seconds = Int(timestamp) % 60
+        return "\(minutes):\(String(format: "%02d", seconds))"
     }
 } 
