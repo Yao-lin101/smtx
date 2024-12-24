@@ -214,9 +214,24 @@ struct TimelineEditorView: View {
                     timelineItems.append(timelineItem)
                 }
                 
-                // 清空表单并退出编辑状态
-                clearForm()
-                isEditing = false
+                // 检查是否在最后1秒内
+                let isLastSecond = totalDuration - currentTime <= 1
+                
+                if isLastSecond {
+                    // 如果在最后1秒，保持表单内容，切换到编辑模式
+                    isEditing = false
+                } else {
+                    // 如果不在最后1秒，清空表单
+                    clearForm()
+                    isEditing = true
+                    
+                    // 计算下一个时间点（当前时间+5秒，但不超过总时长）
+                    let nextTime = min(currentTime + 5, totalDuration)
+                    // 如果下一个时间点和当前时间不同，才更新
+                    if nextTime != currentTime {
+                        currentTime = nextTime
+                    }
+                }
             } catch {
                 print("Error saving timeline item: \(error)")
             }
