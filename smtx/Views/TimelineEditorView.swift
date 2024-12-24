@@ -20,7 +20,7 @@ struct TimelineEditorView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 // 时间轴
                 TimelineSlider(
                     value: $currentTime,
@@ -102,9 +102,11 @@ struct TimelineEditorView: View {
                                 loadTimelineItem(item)
                                 isEditing = false
                             }
+                            .listRowInsets(EdgeInsets())
                     }
                     .onDelete(perform: deleteTimelineItem)
                 }
+                .listStyle(.plain)
             }
             .navigationTitle("编辑时间轴")
             .navigationBarTitleDisplayMode(.inline)
@@ -134,6 +136,13 @@ struct TimelineEditorView: View {
                     // 清空表单
                     clearForm()
                     isEditing = true
+                }
+            }
+            .onAppear {
+                // 检查 0.0 秒位置是否有内容
+                if let initialItem = timelineItems.first(where: { $0.timestamp == 0.0 }) {
+                    loadTimelineItem(initialItem)
+                    isEditing = false
                 }
             }
             .sheet(isPresented: $showingCropper) {
@@ -218,6 +227,48 @@ struct TimelineEditorView: View {
             if let itemIndex = timelineItems.firstIndex(where: { $0.id == item.id }) {
                 timelineItems.remove(at: itemIndex)
             }
+        }
+    }
+    
+    // 时间轴项目行视图
+    private struct TimelineItemRow: View {
+        let item: TimelineItemData
+        
+        var body: some View {
+            HStack(spacing: 12) {
+                // 左侧：图片
+                if let imageURL = item.imageURL {
+                    AsyncImage(url: imageURL) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 120, height: 68) // 16:9 比例
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(width: 120, height: 68)
+                    }
+                }
+                
+                // 右侧：台词和时间节点
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.script)
+                        .font(.body)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    
+                    Text(String(format: "%.1f秒", item.timestamp))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer(minLength: 0)
+            }
+            .frame(height: 80) // 固定行高
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(UIColor.systemBackground))
         }
     }
 }

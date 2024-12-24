@@ -29,51 +29,26 @@ struct CreateTemplateView: View {
     
     var body: some View {
         NavigationView {
-            Form {
-                Section("基本信息") {
-                    TextField("模板标题", text: $title)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // 封面图片
                     coverImageSection
                     
-                    // 时长选择器
-                    HStack {
-                        Text("时长")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        
-                        // 分钟选择器
-                        Picker("", selection: $selectedMinutes) {
-                            ForEach(minutesRange, id: \.self) { minute in
-                                Text("\(minute)").tag(minute)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-                        .frame(width: 50)
-                        .clipped()
-                        Text("分")
-                        
-                        // 秒数选择器
-                        Picker("", selection: $selectedSeconds) {
-                            ForEach(secondsRange, id: \.self) { second in
-                                Text("\(second)").tag(second)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-                        .frame(width: 50)
-                        .clipped()
-                        Text("秒")
-                    }
-                    .onChange(of: selectedMinutes) { _ in
-                        validateDuration()
-                    }
-                    .onChange(of: selectedSeconds) { _ in
-                        validateDuration()
+                    // 标题输入
+                    titleSection
+                    
+                    // 时长选择器（包含时间轴按钮）
+                    durationSection
+                    
+                    // 时间轴预览
+                    if !timelineItems.isEmpty {
+                        TimelinePreviewView(
+                            timelineItems: timelineItems,
+                            totalDuration: Double(selectedMinutes * 60 + selectedSeconds)
+                        )
                     }
                 }
-                
-                Section("时间轴项目") {
-                    timelineItemsSection
-                }
+                .padding()
             }
             .navigationTitle(existingTemplate != nil ? "编辑模板" : "新建模板")
             .navigationBarTitleDisplayMode(.inline)
@@ -106,41 +81,54 @@ struct CreateTemplateView: View {
             }
             .sheet(isPresented: $showingCropper) {
                 if let image = originalUIImage {
-                    ImageCropperView(image: image, aspectRatio: 1/1) { croppedImage in
+                    ImageCropperView(image: image, aspectRatio: 4/3) { croppedImage in
                         originalCoverImage = croppedImage
                         coverImage = Image(uiImage: croppedImage)
                         if existingTemplate == nil {
-                            createTemplateIfNeeded(with: croppedImage)
+                            // 只更新封面图片，不退出视图
+                            do {
+                                var template = try TemplateStorage.shared.loadTemplate(templateId: templateId ?? "")
+                                if let imageData = croppedImage.jpegData(compressionQuality: 0.8) {
+                                    let coverImageName = "cover.jpg"
+                                    if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) {
+                                        try imageData.write(to: baseURL.appendingPathComponent(coverImageName))
+                                        template.template.coverImage = coverImageName
+                                        try TemplateStorage.shared.saveTemplate(template)
+                                    }
+                                }
+                            } catch {
+                                print("Error updating cover image: \(error)")
+                            }
                         }
                     }
                 }
             }
             .onAppear {
-                loadExistingTemplate()
+                if existingTemplate != nil {
+                    loadExistingTemplate()
+                } else {
+                    createNewTemplate()
+                }
             }
         }
     }
     
-    private func validateDuration() {
-        let totalSeconds = selectedMinutes * 60 + selectedSeconds
-        
-        // 确保不小于最小时长（5秒）
-        if totalSeconds < 5 {
-            selectedSeconds = 5
-            selectedMinutes = 0
-            return
+    private func createNewTemplate() {
+        // 创建一个默认的纯色图片作为临时封面
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 300))
+        let defaultCoverImage = renderer.image { context in
+            UIColor.systemGray5.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 400, height: 300))
         }
         
-        // 确保不小于最后一个时间节点
-        if let lastTimestamp = timelineItems.map({ $0.timestamp }).max() {
-            let requiredSeconds = Int(ceil(lastTimestamp))
-            let requiredMinutes = requiredSeconds / 60
-            let requiredRemainingSeconds = requiredSeconds % 60
-            
-            if totalSeconds < requiredSeconds {
-                selectedMinutes = requiredMinutes
-                selectedSeconds = requiredRemainingSeconds
-            }
+        do {
+            templateId = try TemplateStorage.shared.createTemplate(
+                title: title,
+                language: language,
+                coverImage: defaultCoverImage
+            )
+        } catch {
+            print("Error creating template: \(error)")
         }
     }
     
@@ -180,13 +168,12 @@ struct CreateTemplateView: View {
         if existingTemplate != nil {
             updateExistingTemplate()
         } else {
-            createTemplateIfNeeded(with: originalCoverImage!)
+            updateExistingTemplate()
         }
     }
     
     private func updateExistingTemplate() {
-        guard let templateId = templateId,
-              let coverImage = originalCoverImage else { return }
+        guard let templateId = templateId else { return }
         
         do {
             var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
@@ -197,7 +184,8 @@ struct CreateTemplateView: View {
             template.template.totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
             
             // 保存封面图片
-            if let imageData = coverImage.jpegData(compressionQuality: 0.8) {
+            if let coverImage = originalCoverImage,
+               let imageData = coverImage.jpegData(compressionQuality: 0.8) {
                 let coverImageName = "cover.jpg"
                 if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
                     try imageData.write(to: baseURL.appendingPathComponent(coverImageName))
@@ -231,24 +219,93 @@ struct CreateTemplateView: View {
         }
     }
     
-    private func createTemplateIfNeeded(with image: UIImage) {
-        do {
-            if templateId == nil {
-                templateId = try TemplateStorage.shared.createTemplate(
-                    title: title,
-                    language: language,
-                    coverImage: image
-                )
-                
-                // 创建新模板后，不要自动退出，让用户继续编辑
-                originalCoverImage = image
-                coverImage = Image(uiImage: image)
-            } else {
-                // 如果已经有模板ID，说明是在编辑现有模板
-                updateExistingTemplate()
+    private var titleSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("标题")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            TextField("输入模板标题", text: $title)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+    
+    private var durationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("时长")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            // 使用 GeometryReader 来确保正确的布局和对齐
+            GeometryReader { geometry in
+                HStack(spacing: 16) {
+                    // 时长选择器
+                    HStack {
+                        Picker("", selection: $selectedMinutes) {
+                            ForEach(minutesRange, id: \.self) { minute in
+                                Text("\(minute)").tag(minute)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(width: 50)
+                        .clipped()
+                        Text("分")
+                        
+                        Picker("", selection: $selectedSeconds) {
+                            ForEach(secondsRange, id: \.self) { second in
+                                Text("\(second)").tag(second)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(width: 50)
+                        .clipped()
+                        Text("秒")
+                    }
+                    .frame(maxWidth: geometry.size.width * 0.5, alignment: .leading)
+                    
+                    // 添加/编辑时间轴按钮
+                    Button(action: { showingTimelineEditor = true }) {
+                        Label(timelineItems.isEmpty ? "添加时间轴" : "编辑时间轴", 
+                              systemImage: timelineItems.isEmpty ? "plus.circle.fill" : "pencil.circle.fill")
+                            .font(.headline)
+                            .frame(width: geometry.size.width * 0.4)
+                            .padding(.vertical, 12)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
             }
-        } catch {
-            print("Error creating/updating template: \(error)")
+            .frame(height: 120) // 设置固定高度以匹配 Picker 的高度
+            .onChange(of: selectedMinutes) { _ in
+                validateDuration()
+            }
+            .onChange(of: selectedSeconds) { _ in
+                validateDuration()
+            }
+        }
+    }
+    
+    private func validateDuration() {
+        let totalSeconds = selectedMinutes * 60 + selectedSeconds
+        
+        // 确保不小于最小时长（5秒）
+        if totalSeconds < 5 {
+            selectedSeconds = 5
+            selectedMinutes = 0
+            return
+        }
+        
+        // 确保不小于最后一个时间节点
+        if let lastTimestamp = timelineItems.map({ $0.timestamp }).max() {
+            let requiredSeconds = Int(ceil(lastTimestamp))
+            let requiredMinutes = requiredSeconds / 60
+            let requiredRemainingSeconds = requiredSeconds % 60
+            
+            if totalSeconds < requiredSeconds {
+                selectedMinutes = requiredMinutes
+                selectedSeconds = requiredRemainingSeconds
+            }
         }
     }
     
@@ -266,12 +323,12 @@ struct CreateTemplateView: View {
                         coverImage
                             .resizable()
                             .scaledToFill()
-                            .frame(width: geometry.size.width, height: geometry.size.width)
+                            .frame(width: geometry.size.width, height: geometry.size.width * 3/4)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else {
                         RoundedRectangle(cornerRadius: 8)
                             .fill(Color.secondary.opacity(0.2))
-                            .frame(width: geometry.size.width, height: geometry.size.width)
+                            .frame(width: geometry.size.width, height: geometry.size.width * 3/4)
                             .overlay {
                                 Image(systemName: "photo")
                                     .font(.largeTitle)
@@ -291,50 +348,7 @@ struct CreateTemplateView: View {
                     }
                 }
             }
-            .aspectRatio(1, contentMode: .fit)
-        }
-    }
-    
-    private var timelineItemsSection: some View {
-        Group {
-            if timelineItems.isEmpty {
-                Text("点击下方按钮添加时间轴项目")
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(timelineItems) { item in
-                    TimelineItemRow(item: item)
-                }
-                .onDelete(perform: deleteTimelineItem)
-            }
-            
-            Button(action: { showingTimelineEditor = true }) {
-                Label("添加时间轴项目", systemImage: "plus.circle.fill")
-            }
-        }
-    }
-    
-    private func deleteTimelineItem(at offsets: IndexSet) {
-        timelineItems.remove(atOffsets: offsets)
-        
-        // 更新模板的时间轴项目
-        if let templateId = templateId {
-            do {
-                var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-                template.template.timelineItems = timelineItems.map { item in
-                    let imagePath = item.imageURL?.lastPathComponent ?? ""
-                    let fullPath = imagePath.isEmpty ? "" : "images/\(imagePath)"
-                    return TemplateData.TimelineItem(
-                        id: item.id.uuidString,
-                        timestamp: item.timestamp,
-                        script: item.script,
-                        image: fullPath
-                    )
-                }
-                template.metadata.updatedAt = Date()
-                try TemplateStorage.shared.saveTemplate(template)
-            } catch {
-                print("Error updating template: \(error)")
-            }
+            .aspectRatio(4/3, contentMode: .fit)
         }
     }
 }
@@ -346,34 +360,3 @@ struct TimelineItemData: Identifiable {
     var imageURL: URL?
     var timestamp: Double
 }
-
-// 时间轴项目行视图
-struct TimelineItemRow: View {
-    let item: TimelineItemData
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let imageURL = item.imageURL {
-                AsyncImage(url: imageURL) { image in
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 100)
-                }
-            }
-            
-            Text(item.script)
-                .font(.body)
-            
-            Text(String(format: "时间点：%.1f秒", item.timestamp))
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
-} 
