@@ -189,7 +189,6 @@ struct CreateTemplateView: View {
               let coverImage = originalCoverImage else { return }
         
         do {
-            print("Updating template: \(templateId)")
             var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
             
             // 更新基本信息
@@ -220,10 +219,12 @@ struct CreateTemplateView: View {
             
             // 保存所有更改
             try TemplateStorage.shared.saveTemplate(template)
-            print("Template saved successfully")
+            
+            // 重新加载最新的模板数据
+            let updatedTemplate = try TemplateStorage.shared.loadTemplate(templateId: templateId)
             
             // 发送模板更新通知并关闭视图
-            NotificationCenter.default.post(name: .templateDidUpdate, object: template)
+            NotificationCenter.default.post(name: .templateDidUpdate, object: updatedTemplate)
             dismiss()
         } catch {
             print("Error updating template: \(error)")
@@ -233,44 +234,19 @@ struct CreateTemplateView: View {
     private func createTemplateIfNeeded(with image: UIImage) {
         do {
             if templateId == nil {
-                print("Creating new template")
                 templateId = try TemplateStorage.shared.createTemplate(
                     title: title,
                     language: language,
                     coverImage: image
                 )
-                print("New template created with ID: \(templateId ?? "")")
+                
+                // 创建新模板后，不要自动退出，让用户继续编辑
+                originalCoverImage = image
+                coverImage = Image(uiImage: image)
+            } else {
+                // 如果已经有模板ID，说明是在编辑现有模板
+                updateExistingTemplate()
             }
-            
-            // 更新模板数据
-            guard let templateId = templateId else { return }
-            print("Updating template data: \(templateId)")
-            var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-            
-            // 更新基本信息
-            template.template.title = title
-            template.metadata.updatedAt = Date()
-            template.template.totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
-            
-            // 更新时间轴项目
-            template.template.timelineItems = timelineItems.map { item in
-                let imagePath = item.imageURL?.lastPathComponent ?? ""
-                let fullPath = imagePath.isEmpty ? "" : "images/\(imagePath)"
-                return TemplateData.TimelineItem(
-                    id: item.id.uuidString,
-                    timestamp: item.timestamp,
-                    script: item.script,
-                    image: fullPath
-                )
-            }
-            
-            // 保存所有更改
-            try TemplateStorage.shared.saveTemplate(template)
-            print("Template saved successfully")
-            
-            // 发送模板更新通知并关闭视图
-            NotificationCenter.default.post(name: .templateDidUpdate, object: template)
-            dismiss()
         } catch {
             print("Error creating/updating template: \(error)")
         }
@@ -437,7 +413,7 @@ struct ImageCropperView: View {
                                     let scaledWidth = imageViewSize.width * scale
                                     let scaledHeight = imageViewSize.height * scale
                                     
-                                    // 计算最大��许的偏移量
+                                    // 计算最大允许的偏移量
                                     let maxOffsetX = max(0, (scaledWidth - cropWidth) / 2)
                                     let maxOffsetY = max(0, (scaledHeight - cropHeight) / 2)
                                     

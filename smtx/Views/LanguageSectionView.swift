@@ -32,6 +32,7 @@ struct LanguageSectionView: View {
             ForEach(templates, id: \.metadata.id) { template in
                 NavigationLink(value: Route.templateDetail(template)) {
                     TemplateRow(template: template)
+                        .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
@@ -66,14 +67,26 @@ struct LanguageSectionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .templateDidUpdate)) { notification in
             if let updatedTemplate = notification.object as? TemplateFile,
                updatedTemplate.template.language == language {
-                loadTemplates()
+                // 从磁盘加载最新的模板数据
+                do {
+                    let latestTemplate = try TemplateStorage.shared.loadTemplate(templateId: updatedTemplate.metadata.id)
+                    // 先移除旧的模板
+                    templates.removeAll { $0.metadata.id == latestTemplate.metadata.id }
+                    // 添加新的模板
+                    templates.append(latestTemplate)
+                    // 重新排序
+                    templates.sort { $0.metadata.updatedAt > $1.metadata.updatedAt }
+                    // 强制刷新视图
+                    refreshTrigger = UUID()
+                } catch {
+                    print("Error loading updated template: \(error)")
+                }
             }
         }
     }
     
     private func loadTemplates() {
         do {
-            templates.removeAll()
             templates = try TemplateStorage.shared.listTemplates()
                 .filter { $0.template.language == language }
                 .sorted { $0.metadata.updatedAt > $1.metadata.updatedAt }
@@ -86,7 +99,8 @@ struct LanguageSectionView: View {
     private func deleteTemplate(_ template: TemplateFile) {
         do {
             try TemplateStorage.shared.deleteTemplate(templateId: template.metadata.id)
-            loadTemplates()
+            templates.removeAll { $0.metadata.id == template.metadata.id }
+            refreshTrigger = UUID()
         } catch {
             print("Error deleting template: \(error)")
         }
