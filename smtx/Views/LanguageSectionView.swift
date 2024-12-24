@@ -37,7 +37,7 @@ struct TemplateRow: View {
                     .font(.headline)
                     .lineLimit(2)
                     .frame(height: 48, alignment: .topLeading)
-                Text(String(format: "%.1f秒", template.template.totalDuration))
+                Text(formatDuration(template.template.totalDuration))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -59,7 +59,7 @@ struct TemplateRow: View {
                     .font(.headline)
                     .lineLimit(2)
                     .frame(height: 48, alignment: .topLeading)
-                Text(String(format: "%.1f秒", template.template.totalDuration))
+                Text(formatDuration(template.template.totalDuration))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -100,6 +100,16 @@ struct TemplateRow: View {
             return
         }
         coverImage = image
+    }
+    
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        if minutes > 0 {
+            return "\(minutes)分\(String(format: "%02d", seconds))秒"
+        } else {
+            return "\(seconds)秒"
+        }
     }
 }
 
