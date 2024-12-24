@@ -20,6 +20,14 @@ struct CreateTemplateView: View {
     @State private var selectedSeconds = 5
     @State private var tags: [String] = []
     @State private var newTag = ""
+    @State private var showingCancelAlert = false
+    
+    // 用于跟踪初始状态
+    @State private var initialTitle = ""
+    @State private var initialCoverImageData: Data?
+    @State private var initialTimelineItems: [TimelineItemData] = []
+    @State private var initialTotalDuration: Double = 5
+    @State private var initialTags: [String] = []
     
     private let minutesRange = 0...10 // 0-10分钟
     private let secondsRange = 0...59 // 0-59秒
@@ -60,10 +68,11 @@ struct CreateTemplateView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        if existingTemplate == nil, let templateId = templateId {
-                            try? TemplateStorage.shared.deleteTemplate(templateId: templateId)
+                        if hasUnsavedChanges() {
+                            showingCancelAlert = true
+                        } else {
+                            cancelAndDismiss()
                         }
-                        dismiss()
                     }) {
                         Text("取消")
                     }
@@ -76,6 +85,17 @@ struct CreateTemplateView: View {
                     }
                     .disabled(title.isEmpty || originalCoverImage == nil)
                 }
+            }
+            .alert("是否保存更改？", isPresented: $showingCancelAlert) {
+                Button("取消", role: .cancel) { }
+                Button("不保存", role: .destructive) {
+                    cancelAndDismiss()
+                }
+                Button("保存") {
+                    saveTemplate()
+                }
+            } message: {
+                Text("您对模板进行了修改，是否要保存这些更改？")
             }
             .sheet(isPresented: $showingTimelineEditor) {
                 TimelineEditorView(
@@ -114,6 +134,8 @@ struct CreateTemplateView: View {
                 } else {
                     createNewTemplate()
                 }
+                // 保存初始状态
+                saveInitialState()
             }
         }
     }
@@ -224,6 +246,47 @@ struct CreateTemplateView: View {
         } catch {
             print("Error updating template: \(error)")
         }
+    }
+    
+    private func saveInitialState() {
+        initialTitle = title
+        initialCoverImageData = originalCoverImage?.jpegData(compressionQuality: 0.8)
+        initialTimelineItems = timelineItems
+        initialTotalDuration = Double(selectedMinutes * 60 + selectedSeconds)
+        initialTags = tags
+    }
+    
+    private func hasUnsavedChanges() -> Bool {
+        // 检查标题
+        if title != initialTitle { return true }
+        
+        // 检查封面图片
+        let currentCoverImageData = originalCoverImage?.jpegData(compressionQuality: 0.8)
+        if (currentCoverImageData == nil && initialCoverImageData != nil) ||
+           (currentCoverImageData != nil && initialCoverImageData == nil) ||
+           (currentCoverImageData != nil && initialCoverImageData != nil && currentCoverImageData != initialCoverImageData) {
+            return true
+        }
+        
+        // 检查时长
+        let currentDuration = Double(selectedMinutes * 60 + selectedSeconds)
+        if currentDuration != initialTotalDuration { return true }
+        
+        // 检查标签
+        if tags != initialTags { return true }
+        
+        // 检查时间轴项目数量
+        if timelineItems.count != initialTimelineItems.count { return true }
+        
+        // 如果所有检查都通过，说明没有更改
+        return false
+    }
+    
+    private func cancelAndDismiss() {
+        if existingTemplate == nil, let templateId = templateId {
+            try? TemplateStorage.shared.deleteTemplate(templateId: templateId)
+        }
+        dismiss()
     }
     
     private var titleSection: some View {
