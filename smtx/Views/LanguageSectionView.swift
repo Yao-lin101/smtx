@@ -51,7 +51,7 @@ struct TemplateRow: View {
     private var galleryLayout: some View {
         VStack(spacing: 8) {
             // 封面缩略图
-            coverImageView(size: 160)
+            coverImageView(size: 120)
             
             // 标题和时长
             VStack(alignment: .leading, spacing: 4) {
@@ -67,7 +67,7 @@ struct TemplateRow: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
-        .frame(height: 240)
+        .frame(height: 200)
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
@@ -79,12 +79,12 @@ struct TemplateRow: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size, height: size)
+                    .frame(width: size * 4/3, height: size)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.2))
-                    .frame(width: size, height: size)
+                    .frame(width: size * 4/3, height: size)
                     .overlay {
                         Image(systemName: "photo")
                             .foregroundColor(.secondary)

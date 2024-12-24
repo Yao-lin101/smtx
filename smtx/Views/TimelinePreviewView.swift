@@ -43,6 +43,14 @@ private struct TimelinePreviewItem: View {
                         .fill(Color.secondary.opacity(0.2))
                         .frame(width: 120, height: 68)
                 }
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(width: 120, height: 68)
+                    .overlay {
+                        Image(systemName: "photo")
+                            .foregroundColor(.secondary)
+                    }
             }
             
             // 时间点和台词预览
@@ -50,10 +58,12 @@ private struct TimelinePreviewItem: View {
                 Text(String(format: "%.1f秒", item.timestamp))
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text(item.script)
-                    .font(.caption)
-                    .lineLimit(2)
-                    .frame(width: 120)
+                if !item.script.isEmpty {
+                    Text(item.script)
+                        .font(.caption)
+                        .lineLimit(2)
+                        .frame(width: 120)
+                }
             }
         }
     }

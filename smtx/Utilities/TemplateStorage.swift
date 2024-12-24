@@ -267,7 +267,7 @@ class TemplateStorage {
         )
         template.metadata.updatedAt = Date()
         
-        // 保存更新后的模板���据
+        // 保存更新后的模板数据
         let jsonData = try encoder.encode(template)
         try jsonData.write(to: templateDir.appendingPathComponent("template.json"))
         

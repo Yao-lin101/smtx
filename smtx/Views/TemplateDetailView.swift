@@ -99,10 +99,20 @@ struct TimelineItemView: View {
                     .scaledToFit()
                     .frame(height: 150)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 150)
+                    .overlay {
+                        Image(systemName: "photo")
+                            .foregroundColor(.secondary)
+                    }
             }
             
-            Text(item.script)
-                .font(.body)
+            if !item.script.isEmpty {
+                Text(item.script)
+                    .font(.body)
+            }
             
             Text(String(format: "时间点：%.1f秒", item.timestamp))
                 .font(.caption)

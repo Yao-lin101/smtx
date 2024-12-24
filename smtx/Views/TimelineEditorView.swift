@@ -72,7 +72,7 @@ struct TimelineEditorView: View {
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(script.isEmpty || originalImage == nil)
+                            .disabled(script.isEmpty && originalImage == nil)
                         } else {
                             Button(action: { isEditing = true }) {
                                 Text("编辑")
@@ -86,7 +86,7 @@ struct TimelineEditorView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(script.isEmpty || originalImage == nil)
+                        .disabled(script.isEmpty && originalImage == nil)
                     }
                 }
                 .padding(.horizontal)
@@ -177,43 +177,46 @@ struct TimelineEditorView: View {
     }
     
     private func addOrUpdateTimelineItem() {
-        guard let image = originalImage else { return }
-        
         Task {
             do {
-                _ = try TemplateStorage.shared.saveTimelineItem(
-                    templateId: templateId,
-                    timestamp: currentTime,
-                    script: script,
-                    image: image
-                )
+                var imageURL: URL?
                 
-                // 加载模板以获取新的时间轴项目URL
-                let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-                if let item = template.template.timelineItems.last,
-                   let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
-                    let imageURL = baseURL.appendingPathComponent(item.image)
+                // 如果有图片，保存图片
+                if let image = originalImage {
+                    _ = try TemplateStorage.shared.saveTimelineItem(
+                        templateId: templateId,
+                        timestamp: currentTime,
+                        script: script,
+                        image: image
+                    )
                     
-                    // 更新或添加时间轴项目
-                    if let index = timelineItems.firstIndex(where: { $0.timestamp == currentTime }) {
-                        timelineItems[index] = TimelineItemData(
-                            script: script,
-                            imageURL: imageURL,
-                            timestamp: currentTime
-                        )
-                    } else {
-                        let timelineItem = TimelineItemData(
-                            script: script,
-                            imageURL: imageURL,
-                            timestamp: currentTime
-                        )
-                        timelineItems.append(timelineItem)
+                    // 加载模板以获取新的时间轴项目URL
+                    let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+                    if let item = template.template.timelineItems.last,
+                       let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
+                        imageURL = baseURL.appendingPathComponent(item.image)
                     }
-                    
-                    // 清空表单并退出编辑状态
-                    clearForm()
-                    isEditing = false
                 }
+                
+                // 更新或添加时间轴项目
+                if let index = timelineItems.firstIndex(where: { $0.timestamp == currentTime }) {
+                    timelineItems[index] = TimelineItemData(
+                        script: script,
+                        imageURL: imageURL,
+                        timestamp: currentTime
+                    )
+                } else {
+                    let timelineItem = TimelineItemData(
+                        script: script,
+                        imageURL: imageURL,
+                        timestamp: currentTime
+                    )
+                    timelineItems.append(timelineItem)
+                }
+                
+                // 清空表单并退出编辑状态
+                clearForm()
+                isEditing = false
             } catch {
                 print("Error saving timeline item: \(error)")
             }
@@ -249,14 +252,24 @@ struct TimelineEditorView: View {
                             .fill(Color.secondary.opacity(0.2))
                             .frame(width: 120, height: 68)
                     }
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(width: 120, height: 68)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .foregroundColor(.secondary)
+                        }
                 }
                 
                 // 右侧：台词和时间节点
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.script)
-                        .font(.body)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                    if !item.script.isEmpty {
+                        Text(item.script)
+                            .font(.body)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
                     
                     Text(String(format: "%.1f秒", item.timestamp))
                         .font(.caption)
