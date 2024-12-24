@@ -1,28 +1,35 @@
 import SwiftUI
 
+// 展示模式枚举
+enum TemplateListDisplayMode: String {
+    case list
+    case gallery
+}
+
 // 时间轴项目行视图
 struct TemplateRow: View {
     let template: TemplateFile
     @State private var coverImage: UIImage?
+    let displayMode: TemplateListDisplayMode
     
     var body: some View {
+        Group {
+            switch displayMode {
+            case .list:
+                listLayout
+            case .gallery:
+                galleryLayout
+            }
+        }
+        .onAppear {
+            loadCoverImage()
+        }
+    }
+    
+    private var listLayout: some View {
         HStack(spacing: 12) {
             // 封面缩略图
-            if let image = coverImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: 60, height: 60)
-                    .overlay {
-                        Image(systemName: "photo")
-                            .foregroundColor(.secondary)
-                    }
-            }
+            coverImageView(size: 60)
             
             // 标题和时长
             VStack(alignment: .leading, spacing: 4) {
@@ -36,8 +43,48 @@ struct TemplateRow: View {
             Spacer()
         }
         .padding(.vertical, 4)
-        .onAppear {
-            loadCoverImage()
+    }
+    
+    private var galleryLayout: some View {
+        VStack(spacing: 8) {
+            // 封面缩略图
+            coverImageView(size: 160)
+            
+            // 标题和时长
+            VStack(alignment: .leading, spacing: 4) {
+                Text(template.template.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(String(format: "%.1f秒", template.template.totalDuration))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+    }
+    
+    private func coverImageView(size: CGFloat) -> some View {
+        Group {
+            if let image = coverImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(width: size, height: size)
+                    .overlay {
+                        Image(systemName: "photo")
+                            .foregroundColor(.secondary)
+                    }
+            }
         }
     }
     
@@ -56,27 +103,32 @@ struct LanguageSectionView: View {
     @EnvironmentObject private var router: NavigationRouter
     @State private var templates: [TemplateFile] = []
     @State private var refreshTrigger = UUID()
+    @AppStorage("templateListDisplayMode") private var displayMode: TemplateListDisplayMode = .list
+    
+    private let columns = [
+        GridItem(.adaptive(minimum: 160), spacing: 16)
+    ]
     
     var body: some View {
-        List {
-            ForEach(templates, id: \.metadata.id) { template in
-                NavigationLink(value: Route.templateDetail(template)) {
-                    TemplateRow(template: template)
-                        .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        deleteTemplate(template)
-                    } label: {
-                        Label("删除", systemImage: "trash")
+        Group {
+            switch displayMode {
+            case .list:
+                listView
+            case .gallery:
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(templates, id: \.metadata.id) { template in
+                            NavigationLink(value: Route.templateDetail(template)) {
+                                TemplateRow(template: template, displayMode: .gallery)
+                                    .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                templateContextMenu(for: template)
+                            }
+                        }
                     }
-                    
-                    Button {
-                        router.navigate(to: .createTemplate(language, template))
-                    } label: {
-                        Label("编辑", systemImage: "pencil")
-                    }
-                    .tint(.blue)
+                    .padding(16)
                 }
             }
         }
@@ -84,10 +136,16 @@ struct LanguageSectionView: View {
         .navigationTitle(language)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    router.navigate(to: .createTemplate(language, nil))
-                }) {
-                    Image(systemName: "plus")
+                HStack(spacing: 16) {
+                    Button(action: toggleDisplayMode) {
+                        Image(systemName: displayMode == .list ? "square.grid.2x2" : "list.bullet")
+                    }
+                    
+                    Button(action: {
+                        router.navigate(to: .createTemplate(language, nil))
+                    }) {
+                        Image(systemName: "plus")
+                    }
                 }
             }
         }
@@ -112,6 +170,53 @@ struct LanguageSectionView: View {
                     print("Error loading updated template: \(error)")
                 }
             }
+        }
+    }
+    
+    private var listView: some View {
+        List {
+            ForEach(templates, id: \.metadata.id) { template in
+                NavigationLink(value: Route.templateDetail(template)) {
+                    TemplateRow(template: template, displayMode: .list)
+                        .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        deleteTemplate(template)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                    
+                    Button {
+                        router.navigate(to: .createTemplate(language, template))
+                    } label: {
+                        Label("编辑", systemImage: "pencil")
+                    }
+                    .tint(.blue)
+                }
+            }
+        }
+    }
+    
+    private func templateContextMenu(for template: TemplateFile) -> some View {
+        Group {
+            Button {
+                router.navigate(to: .createTemplate(language, template))
+            } label: {
+                Label("编辑", systemImage: "pencil")
+            }
+            
+            Button(role: .destructive) {
+                deleteTemplate(template)
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+    }
+    
+    private func toggleDisplayMode() {
+        withAnimation {
+            displayMode = displayMode == .list ? .gallery : .list
         }
     }
     
