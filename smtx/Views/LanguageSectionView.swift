@@ -3,21 +3,51 @@ import SwiftUI
 // 时间轴项目行视图
 struct TemplateRow: View {
     let template: TemplateFile
+    @State private var coverImage: UIImage?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(template.template.title)
-                .font(.headline)
-            
-            HStack {
-                Text(String(format: "时长：%.1f秒", template.template.totalDuration))
-                Spacer()
-                Text("更新于：\(template.metadata.updatedAt, style: .date)")
+        HStack(spacing: 12) {
+            // 封面缩略图
+            if let image = coverImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 60, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(width: 60, height: 60)
+                    .overlay {
+                        Image(systemName: "photo")
+                            .foregroundColor(.secondary)
+                    }
             }
-            .font(.caption)
-            .foregroundColor(.secondary)
+            
+            // 标题和时长
+            VStack(alignment: .leading, spacing: 4) {
+                Text(template.template.title)
+                    .font(.headline)
+                Text(String(format: "时长：%.1f秒", template.template.totalDuration))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
         }
         .padding(.vertical, 4)
+        .onAppear {
+            loadCoverImage()
+        }
+    }
+    
+    private func loadCoverImage() {
+        guard let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id),
+              let imageData = try? Data(contentsOf: baseURL.appendingPathComponent(template.template.coverImage)),
+              let image = UIImage(data: imageData) else {
+            return
+        }
+        coverImage = image
     }
 }
 
