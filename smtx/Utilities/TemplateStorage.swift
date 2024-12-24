@@ -1,6 +1,12 @@
 import Foundation
 import UIKit
 
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let templateDidUpdate = Notification.Name("templateDidUpdate")
+}
+
 // MARK: - Models
 
 struct TemplateMetadata: Codable, Hashable {
@@ -118,21 +124,29 @@ class TemplateStorage {
         let prefix = userId != nil ? userId! : "local"
         
         do {
+            try? fileManager.removeItem(at: baseURL.appendingPathComponent(".DS_Store"))
+            
             let contents = try fileManager.contentsOfDirectory(
                 at: baseURL,
-                includingPropertiesForKeys: nil
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
             )
             
             return try contents
-                .filter { $0.lastPathComponent.hasPrefix(prefix) }
+                .filter { url in
+                    let isDirectory = try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
+                    return isDirectory && url.lastPathComponent.hasPrefix(prefix)
+                }
                 .compactMap { directoryURL -> TemplateFile? in
                     let jsonURL = directoryURL.appendingPathComponent("template.json")
                     guard fileManager.fileExists(atPath: jsonURL.path) else { return nil }
+                    
                     let jsonData = try Data(contentsOf: jsonURL)
                     return try decoder.decode(TemplateFile.self, from: jsonData)
                 }
-                .sorted { $0.metadata.createdAt > $1.metadata.createdAt }
+                .sorted { $0.metadata.updatedAt > $1.metadata.updatedAt }
         } catch {
+            print("Error listing templates: \(error)")
             throw StorageError.invalidData
         }
     }
@@ -195,6 +209,10 @@ class TemplateStorage {
         }
         
         let jsonURL = templateDir.appendingPathComponent("template.json")
+        guard fileManager.fileExists(atPath: jsonURL.path) else {
+            throw StorageError.templateNotFound
+        }
+        
         let jsonData = try Data(contentsOf: jsonURL)
         return try decoder.decode(TemplateFile.self, from: jsonData)
     }
@@ -206,7 +224,7 @@ class TemplateStorage {
         
         // 生成唯一标识符
         let itemId = UUID().uuidString
-        let timestamp = Int(timestamp * 1000) // 转换为毫���
+        let timestamp = Int(timestamp * 1000) // 转换为毫秒
         let filename = "\(timestamp)_\(itemId).jpg"
         
         // 保存图片
@@ -281,9 +299,23 @@ class TemplateStorage {
             throw StorageError.directoryCreationFailed
         }
         
-        // 保存模板数据
+        if !fileManager.fileExists(atPath: templateDir.path) {
+            try fileManager.createDirectory(at: templateDir, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: templateDir.appendingPathComponent("images"), withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: templateDir.appendingPathComponent("records"), withIntermediateDirectories: true)
+        }
+        
         let jsonData = try encoder.encode(template)
-        try jsonData.write(to: templateDir.appendingPathComponent("template.json"))
+        let jsonURL = templateDir.appendingPathComponent("template.json")
+        
+        let tempURL = templateDir.appendingPathComponent("template.json.tmp")
+        try jsonData.write(to: tempURL, options: .atomic)
+        
+        if fileManager.fileExists(atPath: jsonURL.path) {
+            try fileManager.removeItem(at: jsonURL)
+        }
+        
+        try fileManager.moveItem(at: tempURL, to: jsonURL)
     }
     
     // MARK: - Language Section Management

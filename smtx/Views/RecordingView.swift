@@ -56,7 +56,7 @@ struct RecordingView: View {
     
     private func stopRecording() {
         do {
-            let recordData = try recorder.stopRecording()
+            _ = try recorder.stopRecording()
             currentTime = 0
         } catch {
             print("Error stopping recording: \(error)")

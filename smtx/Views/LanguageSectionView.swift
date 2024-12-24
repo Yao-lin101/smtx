@@ -12,7 +12,7 @@ struct TemplateRow: View {
             HStack {
                 Text(String(format: "时长：%.1f秒", template.template.totalDuration))
                 Spacer()
-                Text(template.metadata.createdAt, style: .date)
+                Text("更新于：\(template.metadata.updatedAt, style: .date)")
             }
             .font(.caption)
             .foregroundColor(.secondary)
@@ -25,6 +25,7 @@ struct LanguageSectionView: View {
     let language: String
     @EnvironmentObject private var router: NavigationRouter
     @State private var templates: [TemplateFile] = []
+    @State private var refreshTrigger = UUID()
     
     var body: some View {
         List {
@@ -32,26 +33,29 @@ struct LanguageSectionView: View {
                 NavigationLink(value: Route.templateDetail(template)) {
                     TemplateRow(template: template)
                 }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        deleteTemplate(template)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                    
                     Button {
                         router.navigate(to: .createTemplate(language, template))
                     } label: {
                         Label("编辑", systemImage: "pencil")
                     }
                     .tint(.blue)
-                    
-                    Button(role: .destructive) {
-                        deleteTemplate(template)
-                    } label: {
-                        Label("删除", systemImage: "trash")
-                    }
                 }
             }
         }
+        .id(refreshTrigger)
         .navigationTitle(language)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: { router.navigate(to: .createTemplate(language)) }) {
+                Button(action: {
+                    router.navigate(to: .createTemplate(language, nil))
+                }) {
                     Image(systemName: "plus")
                 }
             }
@@ -59,12 +63,21 @@ struct LanguageSectionView: View {
         .onAppear {
             loadTemplates()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .templateDidUpdate)) { notification in
+            if let updatedTemplate = notification.object as? TemplateFile,
+               updatedTemplate.template.language == language {
+                loadTemplates()
+            }
+        }
     }
     
     private func loadTemplates() {
         do {
-            let allTemplates = try TemplateStorage.shared.listTemplates()
-            templates = allTemplates.filter { $0.template.language == language }
+            templates.removeAll()
+            templates = try TemplateStorage.shared.listTemplates()
+                .filter { $0.template.language == language }
+                .sorted { $0.metadata.updatedAt > $1.metadata.updatedAt }
+            refreshTrigger = UUID()
         } catch {
             print("Error loading templates: \(error)")
         }

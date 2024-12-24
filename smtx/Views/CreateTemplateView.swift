@@ -16,6 +16,11 @@ struct CreateTemplateView: View {
     @State private var showingCropper = false
     @State private var originalUIImage: UIImage?
     @State private var templateId: String?
+    @State private var selectedMinutes = 0
+    @State private var selectedSeconds = 5
+    
+    private let minutesRange = 0...10 // 0-10分钟
+    private let secondsRange = 0...59 // 0-59秒
     
     init(language: String, existingTemplate: TemplateFile? = nil) {
         self.language = language
@@ -28,6 +33,42 @@ struct CreateTemplateView: View {
                 Section("基本信息") {
                     TextField("模板标题", text: $title)
                     coverImageSection
+                    
+                    // 时长选择器
+                    HStack {
+                        Text("时长")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        
+                        // 分钟选择器
+                        Picker("", selection: $selectedMinutes) {
+                            ForEach(minutesRange, id: \.self) { minute in
+                                Text("\(minute)").tag(minute)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(width: 50)
+                        .clipped()
+                        Text("分")
+                        
+                        // 秒数选择器
+                        Picker("", selection: $selectedSeconds) {
+                            ForEach(secondsRange, id: \.self) { second in
+                                Text("\(second)").tag(second)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(width: 50)
+                        .clipped()
+                        Text("秒")
+                    }
+                    .onChange(of: selectedMinutes) { _ in
+                        validateDuration()
+                    }
+                    .onChange(of: selectedSeconds) { _ in
+                        validateDuration()
+                    }
                 }
                 
                 Section("时间轴项目") {
@@ -39,7 +80,6 @@ struct CreateTemplateView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        // 如果是新建模板且已经创建了模板ID，需要删除它
                         if existingTemplate == nil, let templateId = templateId {
                             try? TemplateStorage.shared.deleteTemplate(templateId: templateId)
                         }
@@ -58,7 +98,11 @@ struct CreateTemplateView: View {
                 }
             }
             .sheet(isPresented: $showingTimelineEditor) {
-                TimelineEditorView(templateId: templateId ?? "", timelineItems: $timelineItems)
+                TimelineEditorView(
+                    templateId: templateId ?? "",
+                    totalDuration: Double(selectedMinutes * 60 + selectedSeconds),
+                    timelineItems: $timelineItems
+                )
             }
             .sheet(isPresented: $showingCropper) {
                 if let image = originalUIImage {
@@ -77,12 +121,40 @@ struct CreateTemplateView: View {
         }
     }
     
+    private func validateDuration() {
+        let totalSeconds = selectedMinutes * 60 + selectedSeconds
+        
+        // 确保不小于最小时长（5秒）
+        if totalSeconds < 5 {
+            selectedSeconds = 5
+            selectedMinutes = 0
+            return
+        }
+        
+        // 确保不小于最后一个时间节点
+        if let lastTimestamp = timelineItems.map({ $0.timestamp }).max() {
+            let requiredSeconds = Int(ceil(lastTimestamp))
+            let requiredMinutes = requiredSeconds / 60
+            let requiredRemainingSeconds = requiredSeconds % 60
+            
+            if totalSeconds < requiredSeconds {
+                selectedMinutes = requiredMinutes
+                selectedSeconds = requiredRemainingSeconds
+            }
+        }
+    }
+    
     private func loadExistingTemplate() {
         guard let template = existingTemplate else { return }
         
         // 加载模板数据
         title = template.template.title
         templateId = template.metadata.id
+        
+        // 设置时长
+        let duration = template.template.totalDuration
+        selectedMinutes = Int(duration) / 60
+        selectedSeconds = Int(duration) % 60
         
         // 加载封面图片
         if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id),
@@ -108,9 +180,8 @@ struct CreateTemplateView: View {
         if existingTemplate != nil {
             updateExistingTemplate()
         } else {
-            createTemplate()
+            createTemplateIfNeeded(with: originalCoverImage!)
         }
-        dismiss()
     }
     
     private func updateExistingTemplate() {
@@ -118,13 +189,15 @@ struct CreateTemplateView: View {
               let coverImage = originalCoverImage else { return }
         
         do {
+            print("Updating template: \(templateId)")
             var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
             
             // 更新基本信息
             template.template.title = title
             template.metadata.updatedAt = Date()
+            template.template.totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
             
-            // 如果封面图片已更改，保存新的封面图片
+            // 保存封面图片
             if let imageData = coverImage.jpegData(compressionQuality: 0.8) {
                 let coverImageName = "cover.jpg"
                 if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
@@ -135,20 +208,71 @@ struct CreateTemplateView: View {
             
             // 更新时间轴项目
             template.template.timelineItems = timelineItems.map { item in
-                TemplateData.TimelineItem(
+                let imagePath = item.imageURL?.lastPathComponent ?? ""
+                let fullPath = imagePath.isEmpty ? "" : "images/\(imagePath)"
+                return TemplateData.TimelineItem(
                     id: item.id.uuidString,
                     timestamp: item.timestamp,
                     script: item.script,
-                    image: item.imageURL?.lastPathComponent ?? ""
+                    image: fullPath
                 )
             }
             
-            // 更新总时长
-            template.template.totalDuration = timelineItems.map { $0.timestamp }.max() ?? 0
-            
+            // 保存所有更改
             try TemplateStorage.shared.saveTemplate(template)
+            print("Template saved successfully")
+            
+            // 发送模板更新通知并关闭视图
+            NotificationCenter.default.post(name: .templateDidUpdate, object: template)
+            dismiss()
         } catch {
             print("Error updating template: \(error)")
+        }
+    }
+    
+    private func createTemplateIfNeeded(with image: UIImage) {
+        do {
+            if templateId == nil {
+                print("Creating new template")
+                templateId = try TemplateStorage.shared.createTemplate(
+                    title: title,
+                    language: language,
+                    coverImage: image
+                )
+                print("New template created with ID: \(templateId ?? "")")
+            }
+            
+            // 更新模板数据
+            guard let templateId = templateId else { return }
+            print("Updating template data: \(templateId)")
+            var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+            
+            // 更新基本信息
+            template.template.title = title
+            template.metadata.updatedAt = Date()
+            template.template.totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
+            
+            // 更新时间轴项目
+            template.template.timelineItems = timelineItems.map { item in
+                let imagePath = item.imageURL?.lastPathComponent ?? ""
+                let fullPath = imagePath.isEmpty ? "" : "images/\(imagePath)"
+                return TemplateData.TimelineItem(
+                    id: item.id.uuidString,
+                    timestamp: item.timestamp,
+                    script: item.script,
+                    image: fullPath
+                )
+            }
+            
+            // 保存所有更改
+            try TemplateStorage.shared.saveTemplate(template)
+            print("Template saved successfully")
+            
+            // 发送模板更新通知并关闭视图
+            NotificationCenter.default.post(name: .templateDidUpdate, object: template)
+            dismiss()
+        } catch {
+            print("Error creating/updating template: \(error)")
         }
     }
     
@@ -210,20 +334,6 @@ struct CreateTemplateView: View {
         }
     }
     
-    private func createTemplateIfNeeded(with image: UIImage) {
-        if templateId == nil {
-            do {
-                templateId = try TemplateStorage.shared.createTemplate(
-                    title: title,
-                    language: language,
-                    coverImage: image
-                )
-            } catch {
-                print("Error creating template: \(error)")
-            }
-        }
-    }
-    
     private func deleteTimelineItem(at offsets: IndexSet) {
         timelineItems.remove(atOffsets: offsets)
         
@@ -232,11 +342,13 @@ struct CreateTemplateView: View {
             do {
                 var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
                 template.template.timelineItems = timelineItems.map { item in
-                    TemplateData.TimelineItem(
+                    let imagePath = item.imageURL?.lastPathComponent ?? ""
+                    let fullPath = imagePath.isEmpty ? "" : "images/\(imagePath)"
+                    return TemplateData.TimelineItem(
                         id: item.id.uuidString,
                         timestamp: item.timestamp,
                         script: item.script,
-                        image: item.imageURL?.lastPathComponent ?? ""
+                        image: fullPath
                     )
                 }
                 template.metadata.updatedAt = Date()
@@ -244,25 +356,6 @@ struct CreateTemplateView: View {
             } catch {
                 print("Error updating template: \(error)")
             }
-        }
-    }
-    
-    private func createTemplate() {
-        guard let templateId = templateId else { return }
-        
-        do {
-            var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-            template.template.title = title
-            template.metadata.updatedAt = Date()
-            
-            // 更新总时长
-            let totalDuration = timelineItems.map { $0.timestamp }.max() ?? 0
-            template.template.totalDuration = totalDuration
-            
-            try TemplateStorage.shared.saveTemplate(template)
-            dismiss()
-        } catch {
-            print("Error updating template: \(error)")
         }
     }
 }
@@ -344,7 +437,7 @@ struct ImageCropperView: View {
                                     let scaledWidth = imageViewSize.width * scale
                                     let scaledHeight = imageViewSize.height * scale
                                     
-                                    // 计算最大允许的偏移量
+                                    // 计算最大��许的偏移量
                                     let maxOffsetX = max(0, (scaledWidth - cropWidth) / 2)
                                     let maxOffsetY = max(0, (scaledHeight - cropHeight) / 2)
                                     
@@ -522,117 +615,5 @@ struct TimelineItemRow: View {
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 4)
-    }
-}
-
-// 时间轴编辑器视图
-struct TimelineEditorView: View {
-    let templateId: String
-    @Environment(\.dismiss) private var dismiss
-    @Binding var timelineItems: [TimelineItemData]
-    @State private var script = ""
-    @State private var timestamp = ""
-    @State private var selectedImage: PhotosPickerItem?
-    @State private var previewImage: Image?
-    @State private var originalImage: UIImage?
-    @State private var hasImage = false
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("图片") {
-                    PhotosPicker(selection: $selectedImage,
-                               matching: .images,
-                               photoLibrary: .shared()) {
-                        if let previewImage = previewImage {
-                            previewImage
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        } else {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.secondary.opacity(0.2))
-                                .frame(height: 200)
-                                .overlay {
-                                    Image(systemName: "photo")
-                                        .font(.largeTitle)
-                                        .foregroundColor(.secondary)
-                                }
-                        }
-                    }
-                }
-                
-                Section("台词") {
-                    TextEditor(text: $script)
-                        .frame(height: 100)
-                }
-                
-                Section("时间点") {
-                    TextField("时间（秒）", text: $timestamp)
-                        .keyboardType(.decimalPad)
-                }
-            }
-            .navigationTitle("添加时间轴项目")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Text("取消")
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        if let time = Double(timestamp),
-                           !script.isEmpty,
-                           let image = originalImage {
-                            Task(priority: .userInitiated) {
-                                do {
-                                    let itemId = try TemplateStorage.shared.saveTimelineItem(
-                                        templateId: templateId,
-                                        timestamp: time,
-                                        script: script,
-                                        image: image
-                                    )
-                                    
-                                    // 加载模板以获取新的时间轴项目URL
-                                    let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-                                    if let item = template.template.timelineItems.last,
-                                       let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
-                                        let imageURL = baseURL.appendingPathComponent(item.image)
-                                        let timelineItem = TimelineItemData(
-                                            script: script,
-                                            imageURL: imageURL,
-                                            timestamp: time
-                                        )
-                                        timelineItems.append(timelineItem)
-                                        timelineItems.sort { $0.timestamp < $1.timestamp }
-                                    }
-                                    dismiss()
-                                } catch {
-                                    print("Error saving timeline item: \(error)")
-                                }
-                            }
-                        }
-                    }) {
-                        Text("添加")
-                    }
-                    .disabled(script.isEmpty || timestamp.isEmpty || !hasImage)
-                }
-            }
-            .onChange(of: selectedImage) { newValue in
-                Task {
-                    if let data = try? await newValue?.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
-                        originalImage = uiImage
-                        previewImage = Image(uiImage: uiImage)
-                        hasImage = true
-                        selectedImage = nil
-                    }
-                }
-            }
-        }
     }
 } 
