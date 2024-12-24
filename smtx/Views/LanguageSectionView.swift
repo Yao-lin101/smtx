@@ -35,13 +35,16 @@ struct TemplateRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(template.template.title)
                     .font(.headline)
-                Text(String(format: "时长：%.1f秒", template.template.totalDuration))
+                    .lineLimit(2)
+                    .frame(height: 48, alignment: .topLeading)
+                Text(String(format: "%.1f秒", template.template.totalDuration))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
         }
+        .frame(height: 76)
         .padding(.vertical, 4)
     }
     
@@ -54,7 +57,8 @@ struct TemplateRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(template.template.title)
                     .font(.headline)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .frame(height: 48, alignment: .topLeading)
                 Text(String(format: "%.1f秒", template.template.totalDuration))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -63,6 +67,7 @@ struct TemplateRow: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
+        .frame(height: 240)
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
