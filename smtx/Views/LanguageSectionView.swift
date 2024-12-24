@@ -119,6 +119,8 @@ struct LanguageSectionView: View {
     @State private var templates: [TemplateFile] = []
     @State private var refreshTrigger = UUID()
     @AppStorage("templateListDisplayMode") private var displayMode: TemplateListDisplayMode = .list
+    @State private var templateToDelete: TemplateFile?
+    @State private var showingDeleteAlert = false
     
     private let columns = [
         GridItem(.adaptive(minimum: 160), spacing: 16)
@@ -130,21 +132,7 @@ struct LanguageSectionView: View {
             case .list:
                 listView
             case .gallery:
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(templates, id: \.metadata.id) { template in
-                            NavigationLink(value: Route.templateDetail(template)) {
-                                TemplateRow(template: template, displayMode: .gallery)
-                                    .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                templateContextMenu(for: template)
-                            }
-                        }
-                    }
-                    .padding(16)
-                }
+                galleryView
             }
         }
         .id(refreshTrigger)
@@ -164,28 +152,48 @@ struct LanguageSectionView: View {
                 }
             }
         }
+        .background(Color(.systemGroupedBackground))
         .onAppear {
             loadTemplates()
         }
         .onReceive(NotificationCenter.default.publisher(for: .templateDidUpdate)) { notification in
             if let updatedTemplate = notification.object as? TemplateFile,
                updatedTemplate.template.language == language {
-                // 从磁盘加载最新的模板数据
-                do {
-                    let latestTemplate = try TemplateStorage.shared.loadTemplate(templateId: updatedTemplate.metadata.id)
-                    // 先移除旧的模板
-                    templates.removeAll { $0.metadata.id == latestTemplate.metadata.id }
-                    // 添加新的模板
-                    templates.append(latestTemplate)
-                    // 重新排序
-                    templates.sort { $0.metadata.updatedAt > $1.metadata.updatedAt }
-                    // 强制刷新视图
-                    refreshTrigger = UUID()
-                } catch {
-                    print("Error loading updated template: \(error)")
-                }
+                loadTemplates()
             }
         }
+        .alert("删除模板", isPresented: $showingDeleteAlert) {
+            Button("取消", role: .cancel) {
+                templateToDelete = nil
+            }
+            Button("删除", role: .destructive) {
+                if let template = templateToDelete {
+                    deleteTemplate(template)
+                }
+                templateToDelete = nil
+            }
+        } message: {
+            Text("确定要删除这个模板吗？该操作无法撤销。")
+        }
+    }
+    
+    private var galleryView: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(templates, id: \.metadata.id) { template in
+                    NavigationLink(value: Route.templateDetail(template)) {
+                        TemplateRow(template: template, displayMode: .gallery)
+                            .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        templateContextMenu(for: template)
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(Color(.systemGroupedBackground))
     }
     
     private var listView: some View {
@@ -197,7 +205,8 @@ struct LanguageSectionView: View {
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
-                        deleteTemplate(template)
+                        templateToDelete = template
+                        showingDeleteAlert = true
                     } label: {
                         Label("删除", systemImage: "trash")
                     }
@@ -211,6 +220,9 @@ struct LanguageSectionView: View {
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemGroupedBackground))
     }
     
     private func templateContextMenu(for template: TemplateFile) -> some View {
@@ -222,7 +234,8 @@ struct LanguageSectionView: View {
             }
             
             Button(role: .destructive) {
-                deleteTemplate(template)
+                templateToDelete = template
+                showingDeleteAlert = true
             } label: {
                 Label("删除", systemImage: "trash")
             }
@@ -249,8 +262,7 @@ struct LanguageSectionView: View {
     private func deleteTemplate(_ template: TemplateFile) {
         do {
             try TemplateStorage.shared.deleteTemplate(templateId: template.metadata.id)
-            templates.removeAll { $0.metadata.id == template.metadata.id }
-            refreshTrigger = UUID()
+            loadTemplates()
         } catch {
             print("Error deleting template: \(error)")
         }
