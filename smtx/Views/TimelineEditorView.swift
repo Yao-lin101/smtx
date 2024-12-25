@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import CoreData
 
 struct TimelineEditorView: View {
     let templateId: String
@@ -162,8 +163,7 @@ struct TimelineEditorView: View {
     
     private func loadTimelineItem(_ item: TimelineItemData) {
         script = item.script
-        if let imageURL = item.imageURL,
-           let imageData = try? Data(contentsOf: imageURL),
+        if let imageData = item.imageData,
            let uiImage = UIImage(data: imageData) {
             originalImage = uiImage
             previewImage = Image(uiImage: uiImage)
@@ -177,64 +177,53 @@ struct TimelineEditorView: View {
     }
     
     private func addOrUpdateTimelineItem() {
-        Task {
-            do {
-                var imageURL: URL?
-                
-                // 如果有图片，保存图片
+        do {
+            let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+            
+            // 如果是更新现有项目
+            if let index = timelineItems.firstIndex(where: { $0.timestamp == currentTime }) {
+                var updatedItem = timelineItems[index]
+                updatedItem.script = script
+                if let image = originalImage,
+                   let imageData = image.jpegData(compressionQuality: 0.8) {
+                    updatedItem.imageData = imageData
+                }
+                timelineItems[index] = updatedItem
+            } else {
+                // 添加新项目
+                var imageData: Data? = nil
                 if let image = originalImage {
-                    _ = try TemplateStorage.shared.saveTimelineItem(
-                        templateId: templateId,
-                        timestamp: currentTime,
-                        script: script,
-                        image: image
-                    )
-                    
-                    // 加载模板以获取新的时间轴项目URL
-                    let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-                    if let item = template.template.timelineItems.last,
-                       let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
-                        imageURL = baseURL.appendingPathComponent(item.image)
-                    }
+                    imageData = image.jpegData(compressionQuality: 0.8)
                 }
                 
-                // 更新或添加时间轴项目
-                if let index = timelineItems.firstIndex(where: { $0.timestamp == currentTime }) {
-                    timelineItems[index] = TimelineItemData(
-                        script: script,
-                        imageURL: imageURL,
-                        timestamp: currentTime
-                    )
-                } else {
-                    let timelineItem = TimelineItemData(
-                        script: script,
-                        imageURL: imageURL,
-                        timestamp: currentTime
-                    )
-                    timelineItems.append(timelineItem)
-                }
-                
-                // 检查是否在最后1秒内
-                let isLastSecond = totalDuration - currentTime <= 1
-                
-                if isLastSecond {
-                    // 如果在最后1秒，保持表单内容，切换到编辑模式
-                    isEditing = false
-                } else {
-                    // 如果不在最后1秒，清空表单
-                    clearForm()
-                    isEditing = true
-                    
-                    // 计算下一个时间点（当前时间+5秒，但不超过总时长）
-                    let nextTime = min(currentTime + 5, totalDuration)
-                    // 如果下一个时间点和当前时间不同，才更新
-                    if nextTime != currentTime {
-                        currentTime = nextTime
-                    }
-                }
-            } catch {
-                print("Error saving timeline item: \(error)")
+                let newItem = TimelineItemData(
+                    script: script,
+                    imageData: imageData,
+                    timestamp: currentTime
+                )
+                timelineItems.append(newItem)
             }
+            
+            // 检查是否在最后1秒内
+            let isLastSecond = totalDuration - currentTime <= 1
+            
+            if isLastSecond {
+                // 如果在最后1秒，保持表单内容，切换到编辑模式
+                isEditing = false
+            } else {
+                // 如果不在最后1秒，清空表单
+                clearForm()
+                isEditing = true
+                
+                // 计算下一个时间点（当前时间+5秒，但不超过总时长）
+                let nextTime = min(currentTime + 5, totalDuration)
+                // 如果下一个时间点和当前时间不同，才更新
+                if nextTime != currentTime {
+                    currentTime = nextTime
+                }
+            }
+        } catch {
+            print("Error saving timeline item: \(error)")
         }
     }
     
@@ -255,18 +244,13 @@ struct TimelineEditorView: View {
         var body: some View {
             HStack(spacing: 12) {
                 // 左侧：图片
-                if let imageURL = item.imageURL {
-                    AsyncImage(url: imageURL) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 120, height: 68) // 16:9 比例
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.secondary.opacity(0.2))
-                            .frame(width: 120, height: 68)
-                    }
+                if let imageData = item.imageData,
+                   let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 120, height: 68) // 16:9 比例
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.secondary.opacity(0.2))
@@ -301,7 +285,7 @@ struct TimelineEditorView: View {
     }
 }
 
-// 自定义时间轴滑块
+// 自定��时间轴滑块
 struct TimelineSlider: View {
     @Binding var value: Double
     let bounds: ClosedRange<Double>

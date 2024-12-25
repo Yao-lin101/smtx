@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreData
 
 struct MainTabView: View {
     @StateObject private var router = NavigationRouter()
@@ -20,14 +21,20 @@ struct MainTabView: View {
                         switch route {
                         case .languageSection(let language):
                             LanguageSectionView(language: language)
-                        case .templateDetail(let template):
-                            TemplateDetailView(template: template)
-                        case .createTemplate(let language, let template):
-                            CreateTemplateView(language: language, existingTemplate: template)
-                        case .recording(let template):
-                            RecordingView(template: template)
-                        case .recordDetail(let templateId, let record):
-                            RecordDetailView(record: record, templateId: templateId)
+                        case .templateDetail(let templateId):
+                            TemplateDetailView(templateId: templateId)
+                        case .createTemplate(let language, let templateId):
+                            CreateTemplateView(language: language, existingTemplateId: templateId)
+                        case .recording(let templateId):
+                            if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId) {
+                                RecordingView(template: template)
+                            }
+                        case .recordDetail(let templateId, let recordId):
+                            if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId),
+                               let records = template.records?.allObjects as? [Record],
+                               let record = records.first(where: { $0.id == recordId }) {
+                                RecordDetailView(record: record, template: template)
+                            }
                         }
                     }
             }
@@ -70,7 +77,7 @@ struct LocalTemplatesView: View {
     @State private var newLanguage = ""
     @State private var showingDeleteAlert = false
     @State private var languageToDelete: String?
-    @State private var templatesByLanguage: [String: [TemplateFile]] = [:]
+    @State private var templatesByLanguage: [String: [Template]] = [:]
     @State private var languageSections: [String] = []
     
     var body: some View {
@@ -154,15 +161,8 @@ struct LocalTemplatesView: View {
         TemplateStorage.shared.deleteLanguageSection(language)
         loadData()
     }
-    
-    private func createTemplate(_ language: String) {
-        router.navigate(to: .createTemplate(language, nil))
-    }
 }
 
-// 预览
-struct MainTabView_Previews: PreviewProvider {
-    static var previews: some View {
-        MainTabView()
-    }
+#Preview {
+    MainTabView()
 } 

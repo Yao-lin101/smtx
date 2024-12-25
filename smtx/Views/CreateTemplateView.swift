@@ -2,10 +2,11 @@ import SwiftUI
 import PhotosUI
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import CoreData
 
 struct CreateTemplateView: View {
     let language: String
-    let existingTemplate: TemplateFile?
+    let existingTemplateId: String?
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var selectedImage: PhotosPickerItem?
@@ -14,7 +15,7 @@ struct CreateTemplateView: View {
     @State private var timelineItems: [TimelineItemData] = []
     @State private var showingTimelineEditor = false
     @State private var showingCropper = false
-    @State private var originalUIImage: UIImage?
+    @State private var tempUIImage: UIImage?
     @State private var templateId: String?
     @State private var selectedMinutes = 0
     @State private var selectedSeconds = 5
@@ -29,12 +30,12 @@ struct CreateTemplateView: View {
     @State private var initialTotalDuration: Double = 5
     @State private var initialTags: [String] = []
     
-    private let minutesRange = 0...10 // 0-10分钟
-    private let secondsRange = 0...59 // 0-59秒
+    private let minutesRange = 0...10
+    private let secondsRange = 0...59
     
-    init(language: String, existingTemplate: TemplateFile? = nil) {
+    init(language: String, existingTemplateId: String? = nil) {
         self.language = language
-        self.existingTemplate = existingTemplate
+        self.existingTemplateId = existingTemplateId
     }
     
     var body: some View {
@@ -63,7 +64,7 @@ struct CreateTemplateView: View {
                 }
                 .padding()
             }
-            .navigationTitle(existingTemplate != nil ? "编辑模板" : "新建模板")
+            .navigationTitle(existingTemplateId != nil ? "编辑模板" : "新建模板")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -81,9 +82,9 @@ struct CreateTemplateView: View {
                     Button(action: {
                         saveTemplate()
                     }) {
-                        Text(existingTemplate != nil ? "保存" : "创建")
+                        Text(existingTemplateId != nil ? "保存" : "创建")
                     }
-                    .disabled(title.isEmpty || originalCoverImage == nil)
+                    .disabled(title.isEmpty)
                 }
             }
             .alert("是否保存更改？", isPresented: $showingCancelAlert) {
@@ -105,21 +106,23 @@ struct CreateTemplateView: View {
                 )
             }
             .sheet(isPresented: $showingCropper) {
-                if let image = originalUIImage {
+                if let image = tempUIImage {
                     ImageCropperView(image: image, aspectRatio: 4/3) { croppedImage in
                         originalCoverImage = croppedImage
                         coverImage = Image(uiImage: croppedImage)
-                        if existingTemplate == nil {
+                        if existingTemplateId == nil {
                             // 只更新封面图片，不退出视图
                             do {
-                                var template = try TemplateStorage.shared.loadTemplate(templateId: templateId ?? "")
-                                if let imageData = croppedImage.jpegData(compressionQuality: 0.8) {
-                                    let coverImageName = "cover.jpg"
-                                    if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) {
-                                        try imageData.write(to: baseURL.appendingPathComponent(coverImageName))
-                                        template.template.coverImage = coverImageName
-                                        try TemplateStorage.shared.saveTemplate(template)
-                                    }
+                                if let templateId = templateId {
+                                    let totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
+                                    try TemplateStorage.shared.updateTemplate(
+                                        templateId: templateId,
+                                        title: title,
+                                        coverImage: croppedImage,
+                                        tags: tags,
+                                        timelineItems: timelineItems,
+                                        totalDuration: totalDuration
+                                    )
                                 }
                             } catch {
                                 print("Error updating cover image: \(error)")
@@ -129,7 +132,7 @@ struct CreateTemplateView: View {
                 }
             }
             .onAppear {
-                if existingTemplate != nil {
+                if existingTemplateId != nil {
                     loadExistingTemplate()
                 } else {
                     createNewTemplate()
@@ -149,103 +152,95 @@ struct CreateTemplateView: View {
         }
         
         do {
+            print("📝 Creating new template with title: \(title)")
             templateId = try TemplateStorage.shared.createTemplate(
                 title: title,
                 language: language,
                 coverImage: defaultCoverImage
             )
+            print("✅ Template created with ID: \(templateId ?? "")")
         } catch {
-            print("Error creating template: \(error)")
+            print("❌ Failed to create template: \(error)")
         }
     }
     
     private func loadExistingTemplate() {
-        guard let template = existingTemplate else { return }
+        guard let templateId = existingTemplateId else { return }
         
-        // 加载模板数据
-        title = template.template.title
-        templateId = template.metadata.id
-        tags = template.template.tags
-        
-        // 设置时长
-        let duration = template.template.totalDuration
-        selectedMinutes = Int(duration) / 60
-        selectedSeconds = Int(duration) % 60
-        
-        // 加载封面图片
-        if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id),
-           let imageData = try? Data(contentsOf: baseURL.appendingPathComponent(template.template.coverImage)),
-           let uiImage = UIImage(data: imageData) {
-            originalCoverImage = uiImage
-            coverImage = Image(uiImage: uiImage)
-        }
-        
-        // 加载时间轴项目
-        timelineItems = template.template.timelineItems.map { item in
-            let imageURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id)?
-                .appendingPathComponent(item.image)
-            return TimelineItemData(
-                script: item.script,
-                imageURL: imageURL,
-                timestamp: item.timestamp
-            )
+        do {
+            let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+            
+            // 加载模板数据
+            self.templateId = template.id
+            title = template.title ?? ""
+            
+            // 设置时长
+            let duration = template.totalDuration
+            selectedMinutes = Int(duration) / 60
+            selectedSeconds = Int(duration) % 60
+            
+            // 加载封面图片
+            if let imageData = template.coverImage,
+               let uiImage = UIImage(data: imageData) {
+                originalCoverImage = uiImage
+                coverImage = Image(uiImage: uiImage)
+            }
+            
+            // 加载标签
+            tags = TemplateStorage.shared.getTemplateTags(template)
+            
+            // 加载时间轴项目
+            if let items = template.timelineItems?.allObjects as? [TimelineItem] {
+                timelineItems = items.map { item in
+                    TimelineItemData(
+                        script: item.script ?? "",
+                        imageData: item.image,
+                        timestamp: item.timestamp
+                    )
+                }
+            }
+            
+            // 保存初始状态
+            saveInitialState()
+        } catch {
+            print("Error loading template: \(error)")
         }
     }
     
     private func saveTemplate() {
-        if existingTemplate != nil {
-            updateExistingTemplate()
-        } else {
-            updateExistingTemplate()
+        do {
+            if existingTemplateId != nil {
+                try updateExistingTemplate()
+            } else {
+                try updateExistingTemplate()
+            }
+            
+            // 发送模板更新通知并关闭视图
+            if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId ?? "") {
+                NotificationCenter.default.post(name: .templateDidUpdate, object: template)
+            }
+            dismiss()
+        } catch {
+            print("Error saving template: \(error)")
         }
     }
     
-    private func updateExistingTemplate() {
+    private func updateExistingTemplate() throws {
         guard let templateId = templateId else { return }
         
-        do {
-            var template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-            
-            // 更新基本信息
-            template.template.title = title
-            template.metadata.updatedAt = Date()
-            template.template.totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
-            template.template.tags = tags
-            
-            // 保存封面图片
-            if let coverImage = originalCoverImage,
-               let imageData = coverImage.jpegData(compressionQuality: 0.8) {
-                let coverImageName = "cover.jpg"
-                if let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) {
-                    try imageData.write(to: baseURL.appendingPathComponent(coverImageName))
-                    template.template.coverImage = coverImageName
-                }
-            }
-            
-            // 更新时间轴项目
-            template.template.timelineItems = timelineItems.map { item in
-                let imagePath = item.imageURL?.lastPathComponent ?? ""
-                let fullPath = imagePath.isEmpty ? "" : "images/\(imagePath)"
-                return TemplateData.TimelineItem(
-                    id: item.id.uuidString,
-                    timestamp: item.timestamp,
-                    script: item.script,
-                    image: fullPath
-                )
-            }
-            
-            // 保存所有更改
-            try TemplateStorage.shared.saveTemplate(template)
-            
-            // 重新加载最新的模板数据
-            let updatedTemplate = try TemplateStorage.shared.loadTemplate(templateId: templateId)
-            
-            // 发送模板更新通知并关闭视图
-            NotificationCenter.default.post(name: .templateDidUpdate, object: updatedTemplate)
-            dismiss()
-        } catch {
-            print("Error updating template: \(error)")
-        }
+        let totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
+        print("📝 Updating template duration: \(totalDuration) seconds")
+        
+        try TemplateStorage.shared.updateTemplate(
+            templateId: templateId,
+            title: title,
+            coverImage: originalCoverImage,
+            tags: tags,
+            timelineItems: timelineItems,
+            totalDuration: totalDuration
+        )
+        
+        print("✅ Template updated with new duration")
     }
     
     private func saveInitialState() {
@@ -283,7 +278,7 @@ struct CreateTemplateView: View {
     }
     
     private func cancelAndDismiss() {
-        if existingTemplate == nil, let templateId = templateId {
+        if existingTemplateId == nil, let templateId = templateId {
             try? TemplateStorage.shared.deleteTemplate(templateId: templateId)
         }
         dismiss()
@@ -358,9 +353,11 @@ struct CreateTemplateView: View {
     
     private func validateDuration() {
         let totalSeconds = selectedMinutes * 60 + selectedSeconds
+        print("⏱️ Validating duration: \(totalSeconds) seconds")
         
         // 确保不小于最小时长（5秒）
         if totalSeconds < 5 {
+            print("⚠️ Duration too short, setting to minimum 5 seconds")
             selectedSeconds = 5
             selectedMinutes = 0
             return
@@ -373,10 +370,13 @@ struct CreateTemplateView: View {
             let requiredRemainingSeconds = requiredSeconds % 60
             
             if totalSeconds < requiredSeconds {
+                print("⚠️ Duration shorter than last timeline item (\(requiredSeconds) seconds), adjusting...")
                 selectedMinutes = requiredMinutes
                 selectedSeconds = requiredRemainingSeconds
             }
         }
+        
+        print("✅ Duration validated: \(selectedMinutes):\(String(format: "%02d", selectedSeconds))")
     }
     
     private var coverImageSection: some View {
@@ -410,7 +410,7 @@ struct CreateTemplateView: View {
                     Task {
                         if let data = try? await newValue?.loadTransferable(type: Data.self) {
                             if let uiImage = UIImage(data: data) {
-                                originalUIImage = uiImage
+                                tempUIImage = uiImage
                                 showingCropper = true
                                 selectedImage = nil
                             }
@@ -470,7 +470,7 @@ struct CreateTemplateView: View {
 struct TimelineItemData: Identifiable {
     let id = UUID()
     var script: String
-    var imageURL: URL?
+    var imageData: Data?
     var timestamp: Double
 }
 

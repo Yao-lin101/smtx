@@ -1,12 +1,13 @@
 import SwiftUI
 import AVFoundation
+import CoreData
 
 struct RecordingView: View {
-    let template: TemplateFile
+    let template: Template
     @Environment(\.dismiss) private var dismiss
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var currentTime: Double = 0
-    @State private var currentItem: TemplateData.TimelineItem?
+    @State private var currentItem: TimelineItem?
     @State private var currentImage: UIImage?
     @State private var overlayHeight: CGFloat = 0
     @State private var timer: Timer?
@@ -16,7 +17,7 @@ struct RecordingView: View {
     @State private var previewPlayer: AVAudioPlayer?
     
     private var progress: Double {
-        template.template.totalDuration > 0 ? currentTime / template.template.totalDuration : 0
+        template.totalDuration > 0 ? currentTime / template.totalDuration : 0
     }
     
     var body: some View {
@@ -78,7 +79,7 @@ struct RecordingView: View {
                     HStack {
                         Text(formatTime(currentTime))
                         Spacer()
-                        Text(formatTime(template.template.totalDuration))
+                        Text(formatTime(template.totalDuration))
                     }
                     .font(.caption.monospacedDigit())
                     .foregroundColor(.secondary)
@@ -167,7 +168,7 @@ struct RecordingView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            if let firstItem = template.template.timelineItems.first {
+            if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
                 updateContent(for: firstItem)
             }
         }
@@ -180,7 +181,6 @@ struct RecordingView: View {
     private func startRecording() {
         print("🎙️ Starting recording...")
         
-        // 重置录音停止标志
         isRecordingStopped = false
         
         // 创建录音文件URL
@@ -192,19 +192,16 @@ struct RecordingView: View {
         let recordingURL = documentsPath.appendingPathComponent(recordingName)
         print("📝 Recording will be saved to: \(recordingURL.path)")
         
-        // 开始录音和时间轴播放
         audioRecorder.startRecording(url: recordingURL)
         overlayHeight = 200
         
-        // 重置时间
         currentTime = 0
         
-        // 启动计时器
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             currentTime += 0.1
             updateTimelineContent()
             
-            if currentTime >= template.template.totalDuration {
+            if currentTime >= template.totalDuration {
                 stopRecording()
             }
         }
@@ -248,7 +245,7 @@ struct RecordingView: View {
             previewPlayer = try AVAudioPlayer(contentsOf: recordingURL)
             isPreviewMode = true
             currentTime = 0
-            if let firstItem = template.template.timelineItems.first {
+            if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
                 updateContent(for: firstItem)
             }
         } catch {
@@ -259,32 +256,21 @@ struct RecordingView: View {
     private func updateTimelineContent() {
         // 查找当前时间对应的时间轴项目
         let currentTimeInt = Int(currentTime)
-        if let item = template.template.timelineItems.first(where: { Int($0.timestamp) == currentTimeInt }) {
+        if let items = template.timelineItems?.allObjects as? [TimelineItem],
+           let item = items.first(where: { Int($0.timestamp) == currentTimeInt }) {
             updateContent(for: item)
         }
     }
     
-    private func updateContent(for item: TemplateData.TimelineItem) {
+    private func updateContent(for item: TimelineItem) {
         // 只有在项目变化时才更新内容
         if currentItem?.timestamp != item.timestamp {
             currentItem = item
-            loadImage(for: item)
+            if let imageData = item.image,
+               let image = UIImage(data: imageData) {
+                currentImage = image
+            }
         }
-    }
-    
-    private func loadImage(for item: TemplateData.TimelineItem) {
-        guard let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
-            return
-        }
-        
-        let imageURL = baseURL.appendingPathComponent(item.image)
-        
-        guard let imageData = try? Data(contentsOf: imageURL),
-              let image = UIImage(data: imageData) else {
-            return
-        }
-        
-        currentImage = image
     }
     
     private func formatTime(_ time: Double) -> String {
@@ -296,23 +282,20 @@ struct RecordingView: View {
     private func startPreview() {
         guard let player = previewPlayer else { return }
         
-        // 确保音频会话处于活动状态
         do {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("❌ Failed to activate audio session: \(error)")
         }
         
-        // 重置时间轴
         currentTime = 0
-        if let firstItem = template.template.timelineItems.first {
+        if let items = template.timelineItems?.allObjects as? [TimelineItem],
+           let firstItem = items.first {
             updateContent(for: firstItem)
         }
         
-        // 开始播放
         player.play()
         
-        // 启动计时器
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             currentTime = player.currentTime
             updateTimelineContent()
@@ -334,58 +317,46 @@ struct RecordingView: View {
         timer?.invalidate()
         timer = nil
         currentTime = 0
-        if let firstItem = template.template.timelineItems.first {
+        if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
             updateContent(for: firstItem)
         }
     }
     
     private func saveRecordingAndDismiss() {
         do {
-            // 获取模板���录
-            guard let templateDir = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
-                print("❌ Failed to get template directory")
+            // 将录音文件转换为数据
+            guard let sourceURL = audioRecorder.recordingURL,
+                  let audioData = try? Data(contentsOf: sourceURL) else {
+                print("❌ Failed to get recording data")
                 return
             }
             
-            // 生成唯一的录音文件名
-            let recordingName = "recording_\(Date().timeIntervalSince1970).m4a"
-            let destinationURL = templateDir.appendingPathComponent("records").appendingPathComponent(recordingName)
-            
-            // 将录音文件移动到模板目录
-            let sourceURL = audioRecorder.recordingURL
-            
-            print("📦 Moving recording file from: \(sourceURL?.path ?? "nil")")
-            print("📦 to: \(destinationURL.path)")
-            
-            if let sourceURL = sourceURL {
-                try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
-                print("✅ Recording file moved successfully")
-                
-                // 创建新的录音记录
-                let record = RecordData(
-                    id: UUID().uuidString,
-                    createdAt: Date(),
-                    duration: recordedDuration,
-                    audioFile: "records/\(recordingName)"
-                )
-                
-                // 更新模板数据
-                var updatedTemplate = try TemplateStorage.shared.loadTemplate(templateId: template.metadata.id)
-                updatedTemplate.records.append(record)
-                try TemplateStorage.shared.saveTemplate(updatedTemplate)
-                print("✅ Record added to template")
-                
-                // 发送录音完成通知
-                NotificationCenter.default.post(name: .recordingFinished, object: updatedTemplate)
-                print("📢 Recording finished notification posted")
-                
-                // 等待一小段时间确保通知被处理
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    dismiss()
-                }
-            } else {
-                print("❌ Recording URL is nil")
+            // 保存录音记录
+            guard let templateId = template.id else {
+                print("❌ Template ID is nil")
+                return
             }
+            
+            try TemplateStorage.shared.saveRecord(
+                templateId: templateId,
+                duration: recordedDuration,
+                audioData: audioData
+            )
+            
+            print("✅ Record added to template")
+            
+            // 发送录音完成通知
+            NotificationCenter.default.post(name: .recordingFinished, object: template)
+            print("📢 Recording finished notification posted")
+            
+            // 等待一小段时间确保通知被处理
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                dismiss()
+            }
+            
+            // 删除临时录音文件
+            try? FileManager.default.removeItem(at: sourceURL)
+            
         } catch {
             print("❌ Failed to save recording: \(error)")
         }

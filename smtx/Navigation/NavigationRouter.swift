@@ -1,31 +1,32 @@
 import SwiftUI
+import CoreData
 
 enum Route: Hashable {
     case languageSection(String)
-    case templateDetail(TemplateFile)
-    case createTemplate(String, TemplateFile? = nil)
-    case recording(TemplateFile)
-    case recordDetail(String, RecordData)
+    case templateDetail(String)
+    case createTemplate(String, String? = nil)
+    case recording(String)
+    case recordDetail(String, String)
     
     func hash(into hasher: inout Hasher) {
         switch self {
         case .languageSection(let language):
             hasher.combine(0)
             hasher.combine(language)
-        case .templateDetail(let template):
+        case .templateDetail(let templateId):
             hasher.combine(1)
-            hasher.combine(template.metadata.id)
-        case .createTemplate(let language, let template):
+            hasher.combine(templateId)
+        case .createTemplate(let language, let templateId):
             hasher.combine(2)
             hasher.combine(language)
-            hasher.combine(template)
-        case .recording(let template):
+            hasher.combine(templateId)
+        case .recording(let templateId):
             hasher.combine(3)
-            hasher.combine(template.metadata.id)
-        case .recordDetail(let templateId, let record):
+            hasher.combine(templateId)
+        case .recordDetail(let templateId, let recordId):
             hasher.combine(4)
             hasher.combine(templateId)
-            hasher.combine(record.id)
+            hasher.combine(recordId)
         }
     }
     
@@ -34,13 +35,13 @@ enum Route: Hashable {
         case (.languageSection(let l), .languageSection(let r)):
             return l == r
         case (.templateDetail(let l), .templateDetail(let r)):
-            return l.metadata.id == r.metadata.id
+            return l == r
         case (.createTemplate(let l1, let l2), .createTemplate(let r1, let r2)):
             return l1 == r1 && l2 == r2
         case (.recording(let l), .recording(let r)):
-            return l.metadata.id == r.metadata.id
+            return l == r
         case (.recordDetail(let l1, let l2), .recordDetail(let r1, let r2)):
-            return l1 == r1 && l2.id == r2.id
+            return l1 == r1 && l2 == r2
         default:
             return false
         }
@@ -65,9 +66,9 @@ class NavigationRouter: ObservableObject {
         }
     }
     
-    func updateCurrentTemplate(_ template: TemplateFile) {
+    func updateCurrentTemplate(_ templateId: String) {
         if case let .createTemplate(language, _) = currentRoute {
-            currentRoute = .createTemplate(language, template)
+            currentRoute = .createTemplate(language, templateId)
         }
     }
 } 

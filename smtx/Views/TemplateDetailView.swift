@@ -1,80 +1,76 @@
 import SwiftUI
+import CoreData
 
 struct TemplateDetailView: View {
-    let template: TemplateFile
+    let templateId: String
     @EnvironmentObject private var router: NavigationRouter
-    @State private var coverImage: UIImage?
-    @State private var currentTemplate: TemplateFile
-    
-    init(template: TemplateFile) {
-        self.template = template
-        self._currentTemplate = State(initialValue: template)
-    }
+    @State private var template: Template?
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingDeleteAlert = false
     
     var body: some View {
         ZStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // 封面图片
-                    coverImageSection
-                    
-                    // 时间轴预览
-                    TimelinePreviewView(
-                        timelineItems: currentTemplate.template.timelineItems.map { item in
-                            TimelineItemData(
-                                script: item.script,
-                                imageURL: getImageURL(for: item),
-                                timestamp: item.timestamp
+                    if let template = template {
+                        coverImageSection(template)
+                        
+                        // 时间轴预览
+                        if let items = template.timelineItems?.allObjects as? [TimelineItem],
+                           !items.isEmpty {
+                            TimelinePreviewView(
+                                timelineItems: items.map { item in
+                                    TimelineItemData(
+                                        script: item.script ?? "",
+                                        imageData: item.image,
+                                        timestamp: item.timestamp
+                                    )
+                                },
+                                totalDuration: template.totalDuration
                             )
-                        },
-                        totalDuration: currentTemplate.template.totalDuration
-                    )
-                    
-                    // 录音记录列表
-                    if !currentTemplate.records.isEmpty {
-                        recordListSection
+                        }
+                        
+                        // 录音记录列表
+                        if let records = template.records?.allObjects as? [Record],
+                           !records.isEmpty {
+                            recordListSection(records)
+                        }
+                        
+                        // 底部留空，确保内容不被录音按钮遮挡
+                        Color.clear.frame(height: 80)
+                    } else {
+                        ProgressView()
                     }
-                    
-                    // 底部留空，确保内容不被录音按钮遮挡
-                    Color.clear.frame(height: 80)
                 }
                 .padding()
             }
             
             // 固定在底部的录音按钮
-            VStack {
-                Spacer()
-                recordButton
+            if let template = template {
+                VStack {
+                    Spacer()
+                    recordButton(template)
+                }
             }
         }
-        .navigationTitle(currentTemplate.template.title)
+        .navigationTitle(template?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            loadCoverImage()
-        }
-        .onDisappear {
-            // 清理图片缓存
-            coverImage = nil
+            loadTemplate()
         }
         .onReceive(NotificationCenter.default.publisher(for: .recordingFinished)) { notification in
-            if let updatedTemplate = notification.object as? TemplateFile {
-                currentTemplate = updatedTemplate
-                print("✅ Template updated from notification")
-            } else {
-                // 如果通知中没有模板数据，则重新加载
-                do {
-                    currentTemplate = try TemplateStorage.shared.loadTemplate(templateId: template.metadata.id)
-                    print("✅ Template reloaded from storage")
-                } catch {
-                    print("❌ Failed to reload template after recording: \(error)")
-                }
+            if let updatedTemplate = notification.object as? Template,
+               updatedTemplate.id == templateId {
+                template = updatedTemplate
             }
         }
     }
     
-    private var coverImageSection: some View {
+    private func coverImageSection(_ template: Template) -> some View {
         Group {
-            if let image = coverImage {
+            if let imageData = template.coverImage,
+               let image = UIImage(data: imageData) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
@@ -92,38 +88,38 @@ struct TemplateDetailView: View {
         }
     }
     
-    private var recordListSection: some View {
+    private func recordListSection(_ records: [Record]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("录音记录")
                 .font(.headline)
                 .padding(.horizontal)
             
             List {
-                ForEach(Array(currentTemplate.records.enumerated()), id: \.element.id) { index, record in
-                    NavigationLink(value: Route.recordDetail(currentTemplate.metadata.id, record)) {
-                        RecordRow(record: record)
-                            .listRowInsets(EdgeInsets())
-                            .padding(.vertical, 4)
-                    }
-                    .listRowBackground(Color.clear)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            deleteRecord(at: index)
-                        } label: {
-                            Label("删除", systemImage: "trash")
+                ForEach(records.sorted { ($0.createdAt ?? Date()) > ($1.createdAt ?? Date()) }, id: \.id) { record in
+                    RecordRow(record: record)
+                        .onTapGesture {
+                            router.navigate(to: .recordDetail(templateId, record.id ?? ""))
                         }
-                    }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                deleteRecord(record)
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                        }
                 }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .frame(height: CGFloat(currentTemplate.records.count) * 60 + 16)
+            .frame(height: CGFloat(records.count) * 88)
         }
     }
     
-    private var recordButton: some View {
+    private func recordButton(_ template: Template) -> some View {
         Button(action: {
-            router.navigate(to: .recording(template))
+            router.navigate(to: .recording(templateId))
         }) {
             HStack {
                 Image(systemName: "record.circle.fill")
@@ -141,88 +137,78 @@ struct TemplateDetailView: View {
         .padding(.bottom)
     }
     
-    private func loadCoverImage() {
-        guard let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
-            return
-        }
-        
-        let imageURL = baseURL.appendingPathComponent(template.template.coverImage)
-        
-        // 在后台线程加载图片
-        DispatchQueue.global(qos: .userInitiated).async {
-            if let imageData = try? Data(contentsOf: imageURL),
-               let image = UIImage(data: imageData) {
-                DispatchQueue.main.async {
-                    self.coverImage = image
-                }
-            }
-        }
-    }
-    
-    private func getImageURL(for item: TemplateData.TimelineItem) -> URL? {
-        guard !item.image.isEmpty,
-              let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
-            return nil
-        }
-        return baseURL.appendingPathComponent(item.image)
-    }
-    
-    private func deleteRecord(at index: Int) {
+    private func loadTemplate() {
         do {
-            // 获取模板目录
-            guard let templateDir = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
-                print("❌ Failed to get template directory")
-                return
-            }
-            
-            // 尝试删除录音文件（如果存在）
-            let audioURL = templateDir.appendingPathComponent(currentTemplate.records[index].audioFile)
-            try? FileManager.default.removeItem(at: audioURL)
-            
-            // 从模板数据中删除记录
-            var updatedTemplate = currentTemplate
-            updatedTemplate.records.remove(at: index)
-            try TemplateStorage.shared.saveTemplate(updatedTemplate)
-            
-            // 重新从磁盘加载模板数据
-            currentTemplate = try TemplateStorage.shared.loadTemplate(templateId: template.metadata.id)
-            print("✅ Record removed from template")
+            template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
         } catch {
-            print("❌ Failed to update template: \(error)")
+            print("Error loading template: \(error)")
+        }
+    }
+    
+    private func deleteRecord(_ record: Record) {
+        do {
+            try TemplateStorage.shared.deleteRecord(record)
+            // 重新加载模板数据以更新列表
+            loadTemplate()
+            print("✅ Record deleted successfully")
+        } catch {
+            print("❌ Failed to delete record: \(error)")
         }
     }
 }
 
+// MARK: - Helper Views
+struct TimelineItemRow: View {
+    let item: TimelineItem
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let imageData = item.image,
+               let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 68)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                if let script = item.script {
+                    Text(script)
+                        .font(.body)
+                        .lineLimit(2)
+                }
+                Text(String(format: "%.1f秒", item.timestamp))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(width: 120)
+    }
+}
+
 struct RecordRow: View {
-    let record: RecordData
+    let record: Record
     
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(record.createdAt, style: .date)
-                    .font(.subheadline)
-                Text(formatDuration(record.duration))
+                Text(record.createdAt ?? Date(), style: .date)
+                Text(String(format: "%.1f秒", record.duration))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
             
-            Image(systemName: "play.circle.fill")
-                .font(.title2)
-                .foregroundColor(.accentColor)
+            Image(systemName: "chevron.right")
+                .foregroundColor(.secondary)
         }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 1)
         .padding(.horizontal)
-        .frame(height: 52)
-    }
-    
-    private func formatDuration(_ duration: Double) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        if minutes > 0 {
-            return "\(minutes)分\(String(format: "%02d", seconds))秒"
-        } else {
-            return "\(seconds)秒"
-        }
+        .padding(.vertical, 4)
     }
 } 

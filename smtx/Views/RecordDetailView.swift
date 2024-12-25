@@ -2,8 +2,8 @@ import SwiftUI
 import AVFoundation
 
 struct RecordDetailView: View {
-    let record: RecordData
-    let templateId: String
+    let record: Record
+    let template: Template
     @StateObject private var player = AudioPlayer()
     @State private var currentTime: TimeInterval = 0
     @State private var timer: Timer?
@@ -39,7 +39,7 @@ struct RecordDetailView: View {
                 HStack {
                     Text("创建时间")
                     Spacer()
-                    Text(record.createdAt, style: .date)
+                    Text(record.createdAt ?? Date(), style: .date)
                 }
                 
                 HStack {
@@ -59,11 +59,10 @@ struct RecordDetailView: View {
     }
     
     private func loadAudio() {
-        guard let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: templateId) else { return }
-        let audioURL = baseURL.appendingPathComponent(record.audioFile)
+        guard let audioData = record.audioData else { return }
         
         do {
-            try player.loadAudio(from: audioURL)
+            try player.loadAudio(data: audioData)
         } catch {
             print("Error loading audio: \(error)")
         }
@@ -97,8 +96,7 @@ class AudioPlayer: NSObject, ObservableObject {
         audioPlayer?.currentTime ?? 0
     }
     
-    func loadAudio(from url: URL) throws {
-        let data = try Data(contentsOf: url)
+    func loadAudio(data: Data) throws {
         audioPlayer = try AVAudioPlayer(data: data)
         audioPlayer?.delegate = self
     }

@@ -1,4 +1,4 @@
-import Foundation
+import CoreData
 import UIKit
 
 // MARK: - Notification Names
@@ -8,336 +8,140 @@ extension Notification.Name {
     static let recordingFinished = Notification.Name("recordingFinished")
 }
 
-// MARK: - Models
-
-struct TemplateMetadata: Codable, Hashable {
-    let id: String
-    let creator: Creator
-    var createdAt: Date
-    var updatedAt: Date
-    var status: TemplateStatus
-    
-    struct Creator: Codable, Hashable {
-        let type: CreatorType
-        let id: String?
-    }
-}
-
-struct TemplateData: Codable {
-    var title: String
-    let language: String
-    var coverImage: String
-    var totalDuration: Double
-    var timelineItems: [TimelineItem]
-    var tags: [String]
-    
-    init(title: String, language: String, coverImage: String, totalDuration: Double = 5.0) {
-        self.title = title
-        self.language = language
-        self.coverImage = coverImage
-        self.totalDuration = totalDuration
-        self.timelineItems = []
-        self.tags = []
-    }
-    
-    // 添加自定义解码方法以处理缺失的 tags 字段
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        title = try container.decode(String.self, forKey: .title)
-        language = try container.decode(String.self, forKey: .language)
-        coverImage = try container.decode(String.self, forKey: .coverImage)
-        totalDuration = try container.decode(Double.self, forKey: .totalDuration)
-        timelineItems = try container.decode([TimelineItem].self, forKey: .timelineItems)
-        // 如果 tags 字段不存在，使用空数组作为默认值
-        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
-    }
-    
-    struct TimelineItem: Codable, Identifiable, Hashable {
-        let id: String
-        let timestamp: Double
-        let script: String
-        let image: String
-    }
-}
-
-struct RecordData: Codable, Identifiable, Hashable {
-    let id: String
-    let createdAt: Date
-    let duration: Double
-    let audioFile: String
-}
-
-struct TemplateFile: Codable, Hashable {
-    var version: String
-    var metadata: TemplateMetadata
-    var template: TemplateData
-    var records: [RecordData]
-    
-    static func == (lhs: TemplateFile, rhs: TemplateFile) -> Bool {
-        return lhs.metadata.id == rhs.metadata.id
-    }
-    
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(metadata.id)
-    }
-}
-
-enum CreatorType: String, Codable, Hashable {
-    case local
-    case user
-}
-
-enum TemplateStatus: String, Codable, Hashable {
-    case local
-    case synced
-    case modified
-}
-
 // MARK: - Storage Service
 
 class TemplateStorage {
     static let shared = TemplateStorage()
-    private let fileManager = FileManager.default
-    private let decoder = JSONDecoder()
-    private let encoder = JSONEncoder()
+    
+    private let container: NSPersistentContainer
+    private let context: NSManagedObjectContext
     private let languagesKey = "LanguageSections"
     private let userDefaults = UserDefaults.standard
     
     private init() {
-        // 设置日期编码格式为ISO8601
-        encoder.dateEncodingStrategy = .iso8601
-        decoder.dateDecodingStrategy = .iso8601
-        
-        // 创建模板根目录
-        createTemplatesDirectoryIfNeeded()
-    }
-    
-    // MARK: - Directory Management
-    
-    private var templatesDirectoryURL: URL? {
-        fileManager.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Templates")
-    }
-    
-    private func createTemplatesDirectoryIfNeeded() {
-        guard let directoryURL = templatesDirectoryURL else { return }
-        
-        if !fileManager.fileExists(atPath: directoryURL.path) {
-            do {
-                try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            } catch {
-                print("Error creating templates directory: \(error)")
+        container = NSPersistentContainer(name: "Model")
+        container.loadPersistentStores { description, error in
+            if let error = error {
+                print("Error loading Core Data: \(error)")
             }
         }
-    }
-    
-    func getTemplateDirectoryURL(templateId: String, userId: String? = nil) -> URL? {
-        guard let baseURL = templatesDirectoryURL else { return nil }
-        let prefix = userId != nil ? userId! : "local"
-        return baseURL.appendingPathComponent("\(prefix)_\(templateId)")
-    }
-    
-    // MARK: - Template Listing
-    
-    func listTemplates(userId: String? = nil) throws -> [TemplateFile] {
-        guard let baseURL = templatesDirectoryURL else {
-            throw StorageError.directoryCreationFailed
-        }
-        
-        let prefix = userId != nil ? userId! : "local"
-        
-        do {
-            try? fileManager.removeItem(at: baseURL.appendingPathComponent(".DS_Store"))
-            
-            let contents = try fileManager.contentsOfDirectory(
-                at: baseURL,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-            
-            return try contents
-                .filter { url in
-                    let isDirectory = try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
-                    return isDirectory && url.lastPathComponent.hasPrefix(prefix)
-                }
-                .compactMap { directoryURL -> TemplateFile? in
-                    let jsonURL = directoryURL.appendingPathComponent("template.json")
-                    guard fileManager.fileExists(atPath: jsonURL.path) else { return nil }
-                    
-                    let jsonData = try Data(contentsOf: jsonURL)
-                    return try decoder.decode(TemplateFile.self, from: jsonData)
-                }
-                .sorted { $0.metadata.updatedAt > $1.metadata.updatedAt }
-        } catch {
-            print("Error listing templates: \(error)")
-            throw StorageError.invalidData
-        }
-    }
-    
-    func listTemplatesByLanguage() throws -> [String: [TemplateFile]] {
-        let templates = try listTemplates()
-        return Dictionary(grouping: templates) { $0.template.language }
+        context = container.viewContext
+        context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
     
     // MARK: - Template Operations
     
     func createTemplate(title: String, language: String, coverImage: UIImage) throws -> String {
+        let template = Template(context: context)
         let templateId = UUID().uuidString
         
-        // 创建模板目录结构
-        guard let templateDir = getTemplateDirectoryURL(templateId: templateId) else {
-            throw StorageError.directoryCreationFailed
-        }
+        // Set metadata
+        template.id = templateId
+        template.creatorType = CreatorType.local.rawValue
+        template.creatorId = nil
+        template.createdAt = Date()
+        template.updatedAt = Date()
+        template.status = TemplateStatus.local.rawValue
+        template.version = "1.0"
         
-        try fileManager.createDirectory(at: templateDir, withIntermediateDirectories: true)
-        try fileManager.createDirectory(at: templateDir.appendingPathComponent("images"), withIntermediateDirectories: true)
-        try fileManager.createDirectory(at: templateDir.appendingPathComponent("records"), withIntermediateDirectories: true)
+        // Set template data
+        template.title = title
+        template.language = language
+        template.coverImage = coverImage.jpegData(compressionQuality: 0.8)
+        template.totalDuration = 0
+        template.tags = []
         
-        // 保存封面图片
-        guard let coverImageData = coverImage.jpegData(compressionQuality: 0.8) else {
-            throw StorageError.imageProcessingFailed
-        }
-        try coverImageData.write(to: templateDir.appendingPathComponent("cover.jpg"))
-        
-        // 创建模板数据
-        let template = TemplateFile(
-            version: "1.0",
-            metadata: TemplateMetadata(
-                id: templateId,
-                creator: TemplateMetadata.Creator(type: .local, id: nil),
-                createdAt: Date(),
-                updatedAt: Date(),
-                status: .local
-            ),
-            template: TemplateData(
-                title: title,
-                language: language,
-                coverImage: "cover.jpg",
-                totalDuration: 0
-            ),
-            records: []
-        )
-        
-        // 保存模板数据
-        let jsonData = try encoder.encode(template)
-        try jsonData.write(to: templateDir.appendingPathComponent("template.json"))
-        
+        try context.save()
         return templateId
     }
     
-    func loadTemplate(templateId: String, userId: String? = nil) throws -> TemplateFile {
-        guard let templateDir = getTemplateDirectoryURL(templateId: templateId, userId: userId) else {
+    func loadTemplate(templateId: String) throws -> Template {
+        let request = Template.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", templateId)
+        
+        guard let template = try context.fetch(request).first,
+              template.id != nil
+        else {
             throw StorageError.templateNotFound
         }
         
-        let jsonURL = templateDir.appendingPathComponent("template.json")
-        guard fileManager.fileExists(atPath: jsonURL.path) else {
-            throw StorageError.templateNotFound
-        }
-        
-        let jsonData = try Data(contentsOf: jsonURL)
-        return try decoder.decode(TemplateFile.self, from: jsonData)
+        return template
+    }
+    
+    func listTemplates() throws -> [Template] {
+        let request = Template.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
+        return try context.fetch(request)
+    }
+    
+    func listTemplatesByLanguage() throws -> [String: [Template]] {
+        let templates = try listTemplates()
+        return Dictionary(grouping: templates) { $0.language ?? "" }
     }
     
     func saveTimelineItem(templateId: String, timestamp: Double, script: String, image: UIImage) throws -> String {
-        guard let templateDir = getTemplateDirectoryURL(templateId: templateId) else {
-            throw StorageError.templateNotFound
-        }
+        let template = try loadTemplate(templateId: templateId)
+        let item = TimelineItem(context: context)
         
-        // 生成唯一标识符
         let itemId = UUID().uuidString
-        let timestamp = Int(timestamp * 1000) // 转换为毫秒
-        let filename = "\(timestamp)_\(itemId).jpg"
+        item.id = itemId
+        item.timestamp = timestamp
+        item.script = script
+        item.image = image.jpegData(compressionQuality: 0.8)
+        item.template = template
         
-        // 保存图片
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            throw StorageError.imageProcessingFailed
-        }
-        let imageURL = templateDir.appendingPathComponent("images").appendingPathComponent(filename)
-        try imageData.write(to: imageURL)
-        
-        // 更新模板数据
-        var template = try loadTemplate(templateId: templateId)
-        template.template.timelineItems.append(
-            TemplateData.TimelineItem(
-                id: itemId,
-                timestamp: Double(timestamp) / 1000,
-                script: script,
-                image: "images/\(filename)"
-            )
-        )
-        template.metadata.updatedAt = Date()
-        
-        // 保存更新后的模板数据
-        let jsonData = try encoder.encode(template)
-        try jsonData.write(to: templateDir.appendingPathComponent("template.json"))
+        template.updatedAt = Date()
+        try context.save()
         
         return itemId
     }
     
     func saveRecord(templateId: String, duration: Double, audioData: Data) throws -> String {
-        guard let templateDir = getTemplateDirectoryURL(templateId: templateId) else {
-            throw StorageError.templateNotFound
-        }
+        let template = try loadTemplate(templateId: templateId)
+        let record = Record(context: context)
         
-        // 生成唯一标识符
         let recordId = UUID().uuidString
-        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
-        let filename = "\(timestamp)_\(recordId).m4a"
+        record.id = recordId
+        record.createdAt = Date()
+        record.duration = duration
+        record.audioData = audioData
+        record.template = template
         
-        // 保存音频文件
-        let audioURL = templateDir.appendingPathComponent("records").appendingPathComponent(filename)
-        try audioData.write(to: audioURL)
-        
-        // 更新模板数据
-        var template = try loadTemplate(templateId: templateId)
-        template.records.append(
-            RecordData(
-                id: recordId,
-                createdAt: Date(),
-                duration: duration,
-                audioFile: "records/\(filename)"
-            )
-        )
-        template.metadata.updatedAt = Date()
-        
-        // 保存更新后的模板数据
-        let jsonData = try encoder.encode(template)
-        try jsonData.write(to: templateDir.appendingPathComponent("template.json"))
-        
+        try context.save()
         return recordId
     }
     
-    func deleteTemplate(templateId: String, userId: String? = nil) throws {
-        guard let templateDir = getTemplateDirectoryURL(templateId: templateId, userId: userId) else {
-            throw StorageError.templateNotFound
+    func deleteTemplate(templateId: String) throws {
+        let template = try loadTemplate(templateId: templateId)
+        print("📝 Deleting template: \(templateId)")
+        
+        // 1. 删除所有时间轴项目
+        if let timelineItems = template.timelineItems {
+            for case let item as TimelineItem in timelineItems {
+                context.delete(item)
+                print("✅ Deleted timeline item: \(item.id ?? "")")
+            }
         }
         
-        try fileManager.removeItem(at: templateDir)
+        // 2. 删除所有录音记录
+        if let records = template.records {
+            for case let record as Record in records {
+                context.delete(record)
+                print("✅ Deleted record: \(record.id ?? "")")
+            }
+        }
+        
+        // 3. 删除模板本身（会自动删除关联的封面图片数据、标签等）
+        context.delete(template)
+        
+        // 4. 保存更改
+        try context.save()
+        print("✅ Template deleted successfully")
     }
     
-    func saveTemplate(_ template: TemplateFile) throws {
-        guard let templateDir = getTemplateDirectoryURL(templateId: template.metadata.id) else {
-            throw StorageError.directoryCreationFailed
-        }
-        
-        if !fileManager.fileExists(atPath: templateDir.path) {
-            try fileManager.createDirectory(at: templateDir, withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: templateDir.appendingPathComponent("images"), withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: templateDir.appendingPathComponent("records"), withIntermediateDirectories: true)
-        }
-        
-        let jsonData = try encoder.encode(template)
-        let jsonURL = templateDir.appendingPathComponent("template.json")
-        
-        let tempURL = templateDir.appendingPathComponent("template.json.tmp")
-        try jsonData.write(to: tempURL, options: .atomic)
-        
-        if fileManager.fileExists(atPath: jsonURL.path) {
-            try fileManager.removeItem(at: jsonURL)
-        }
-        
-        try fileManager.moveItem(at: tempURL, to: jsonURL)
+    func saveTemplate(_ template: Template) throws {
+        template.updatedAt = Date()
+        try context.save()
     }
     
     // MARK: - Language Section Management
@@ -355,44 +159,97 @@ class TemplateStorage {
     }
     
     func deleteLanguageSection(_ name: String) {
-        var sections = getLanguageSections()
-        sections.removeAll { $0 == name }
-        userDefaults.set(sections, forKey: languagesKey)
+        // 1. 先获取该语言下的所有模板
+        let request = Template.fetchRequest()
+        request.predicate = NSPredicate(format: "language == %@", name)
         
-        // 删除该语言下的所有模板
         do {
-            let templates = try listTemplates()
-            for template in templates where template.template.language == name {
-                try deleteTemplate(templateId: template.metadata.id)
+            let templates = try context.fetch(request)
+            print("📝 Deleting language section: \(name) with \(templates.count) templates")
+            
+            // 2. 删除每个模板及其关联数据
+            for template in templates {
+                // 删除所有时间轴项目
+                if let timelineItems = template.timelineItems {
+                    for case let item as TimelineItem in timelineItems {
+                        context.delete(item)
+                    }
+                }
+                
+                // 删除所有录音记录
+                if let records = template.records {
+                    for case let record as Record in records {
+                        context.delete(record)
+                    }
+                }
+                
+                // 删除模板本身
+                context.delete(template)
+                print("✅ Deleted template: \(template.id ?? "")")
             }
+            
+            // 3. 从 UserDefaults 中移除语言分区
+            var sections = getLanguageSections()
+            sections.removeAll { $0 == name }
+            userDefaults.set(sections, forKey: languagesKey)
+            
+            // 4. 保存更改
+            try context.save()
+            print("✅ Language section deleted successfully")
         } catch {
-            print("Error deleting templates for language section: \(error)")
+            print("❌ Failed to delete language section: \(error)")
         }
     }
     
-    // 添加录音记录
-    func addRecord(templateId: String, record: RecordData) throws {
-        print("📝 TemplateStorage - Adding record to template: \(templateId)")
+    func deleteRecord(_ record: Record) throws {
+        context.delete(record)
+        try context.save()
+    }
+    
+    func updateTemplate(templateId: String, title: String, coverImage: UIImage?, tags: [String], timelineItems: [TimelineItemData], totalDuration: Double) throws {
+        let template = try loadTemplate(templateId: templateId)
         
-        // 获取模板目录
-        guard let templateDir = getTemplateDirectoryURL(templateId: templateId) else {
-            print("❌ TemplateStorage - Failed to get template directory")
-            throw StorageError.fileNotFound
+        print("📝 Updating template: \(templateId)")
+        print("- Title: \(title)")
+        print("- Duration: \(totalDuration) seconds")
+        print("- Tags: \(tags)")
+        print("- Timeline items: \(timelineItems.count)")
+        
+        // 更新基本信息
+        template.title = title
+        template.updatedAt = Date()
+        template.tags = tags
+        template.totalDuration = totalDuration // 添加总时长更新
+        
+        // 更新封面图片
+        if let coverImage = coverImage {
+            template.coverImage = coverImage.jpegData(compressionQuality: 0.8)
         }
         
-        // 读取现有模板数据
-        let templateURL = templateDir.appendingPathComponent("template.json")
-        var templateData = try Data(contentsOf: templateURL)
-        var template = try JSONDecoder().decode(TemplateFile.self, from: templateData)
+        // 更新时间轴项目
+        // 先删除现有的时间轴项目
+        if let existingItems = template.timelineItems {
+            for case let item as TimelineItem in existingItems {
+                context.delete(item)
+            }
+        }
         
-        // 添加新记录
-        template.records.append(record)
+        // 添加新的时间轴项目
+        for itemData in timelineItems {
+            let item = TimelineItem(context: context)
+            item.id = itemData.id.uuidString
+            item.timestamp = itemData.timestamp
+            item.script = itemData.script
+            item.image = itemData.imageData
+            item.template = template
+        }
         
-        // 保存更新后的模板数据
-        templateData = try JSONEncoder().encode(template)
-        try templateData.write(to: templateURL)
-        
-        print("✅ TemplateStorage - Record added successfully")
+        try context.save()
+        print("✅ Template updated successfully")
+    }
+    
+    func getTemplateTags(_ template: Template) -> [String] {
+        return template.tags ?? []
     }
 }
 
@@ -404,4 +261,17 @@ enum StorageError: Error {
     case imageProcessingFailed
     case invalidData
     case fileNotFound
+}
+
+// MARK: - Helper Types
+
+enum CreatorType: String {
+    case local
+    case user
+}
+
+enum TemplateStatus: String {
+    case local
+    case synced
+    case modified
 } 

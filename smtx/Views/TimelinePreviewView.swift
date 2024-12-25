@@ -31,18 +31,13 @@ private struct TimelinePreviewItem: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // 图片预览
-            if let imageURL = item.imageURL {
-                AsyncImage(url: imageURL) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 120, height: 68) // 16:9 比例
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(width: 120, height: 68)
-                }
+            if let imageData = item.imageData,
+               let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 68) // 16:9 比例
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.2))
