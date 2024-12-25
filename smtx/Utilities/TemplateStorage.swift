@@ -218,7 +218,7 @@ class TemplateStorage {
         // 更新基本信息
         template.title = title
         template.updatedAt = Date()
-        template.tags = tags
+        template.tags = tags as NSArray
         template.totalDuration = totalDuration // 添加总时长更新
         
         // 更新封面图片
@@ -249,7 +249,7 @@ class TemplateStorage {
     }
     
     func getTemplateTags(_ template: Template) -> [String] {
-        return template.tags ?? []
+        return (template.tags as? [String]) ?? []
     }
 }
 

@@ -15,7 +15,7 @@
         <attribute name="language" attributeType="String"/>
         <attribute name="coverImage" attributeType="Binary"/>
         <attribute name="totalDuration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
-        <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="[String]"/>
+        <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="NSArray"/>
         
         <!-- Relationships -->
         <relationship name="timelineItems" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TimelineItem" inverseName="template" inverseEntity="TimelineItem"/>
