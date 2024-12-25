@@ -185,40 +185,61 @@ struct ImageCropperView: View {
         let imageSize = image.size
         let imageAspect = imageSize.width / imageSize.height
         
-        var drawRect = CGRect.zero
-        var cropRect = CGRect.zero
+        // 计算基于视图大小的裁剪框
+        let viewWidth = UIScreen.main.bounds.width
+        let cropWidth = viewWidth * 0.9
+        let cropHeight = cropWidth / aspectRatio
         
-        if imageAspect > aspectRatio {
-            // 图片更宽，需要裁剪两边
-            let newWidth = imageSize.height * aspectRatio
-            let xOffset = (imageSize.width - newWidth) / 2
-            drawRect = CGRect(x: -xOffset, y: 0, width: imageSize.width, height: imageSize.height)
-            cropRect = CGRect(x: 0, y: 0, width: newWidth, height: imageSize.height)
-        } else {
-            // 图片更高，需要裁剪上下
-            let newHeight = imageSize.width / aspectRatio
-            let yOffset = (imageSize.height - newHeight) / 2
-            drawRect = CGRect(x: 0, y: -yOffset, width: imageSize.width, height: imageSize.height)
-            cropRect = CGRect(x: 0, y: 0, width: imageSize.width, height: newHeight)
-        }
+        // 计算图片在视图中的实际显示尺寸
+        let imageViewSize: CGSize = {
+            if imageAspect > aspectRatio {
+                let height = cropHeight
+                let width = height * imageAspect
+                return CGSize(width: width, height: height)
+            } else {
+                let width = cropWidth
+                let height = width / imageAspect
+                return CGSize(width: width, height: height)
+            }
+        }()
         
-        // 应用缩放和偏移
-        let scaleTransform = CGAffineTransform(scaleX: scale, y: scale)
-        let offsetTransform = CGAffineTransform(translationX: offset.width, y: offset.height)
-        let finalTransform = scaleTransform.concatenating(offsetTransform)
+        // 计算缩放比例（从显示尺寸到实际图片尺寸）
+        let displayToImageScale = imageSize.width / imageViewSize.width
+        
+        // 计算实际裁剪区域在图片上的位置
+        let scaledOffset = CGPoint(
+            x: (-offset.width * displayToImageScale) / scale,
+            y: (-offset.height * displayToImageScale) / scale
+        )
+        
+        // 计算裁剪区域
+        let cropRectWidth = (cropWidth * displayToImageScale) / scale
+        let cropRectHeight = (cropHeight * displayToImageScale) / scale
+        
+        // 确保裁剪区域不超出图片边界
+        let normalizedX = max(0, min(imageSize.width - cropRectWidth, 
+                                    (imageSize.width - cropRectWidth) / 2 + scaledOffset.x))
+        let normalizedY = max(0, min(imageSize.height - cropRectHeight, 
+                                    (imageSize.height - cropRectHeight) / 2 + scaledOffset.y))
+        
+        let finalCropRect = CGRect(
+            x: normalizedX,
+            y: normalizedY,
+            width: cropRectWidth,
+            height: cropRectHeight
+        )
         
         // 创建裁剪上下文
         let format = UIGraphicsImageRendererFormat()
         format.scale = image.scale
         format.opaque = true
         
-        let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: format)
+        let renderer = UIGraphicsImageRenderer(size: finalCropRect.size, format: format)
         let croppedImage = renderer.image { context in
-            context.cgContext.setFillColor(UIColor.black.cgColor)
-            context.cgContext.fill(cropRect)
-            
-            context.cgContext.concatenate(finalTransform)
-            image.draw(in: drawRect)
+            // 将图片绘制到上下文中，只绘制裁剪区域
+            let drawRect = CGRect(origin: .zero, size: finalCropRect.size)
+            context.cgContext.translateBy(x: -finalCropRect.minX, y: -finalCropRect.minY)
+            image.draw(in: CGRect(origin: .zero, size: imageSize))
         }
         
         onCrop(croppedImage)
