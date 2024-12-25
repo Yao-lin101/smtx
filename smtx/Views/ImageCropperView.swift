@@ -82,16 +82,6 @@ struct ImageCropperView: View {
                 ZStack {
                     Color.black
                     
-                    // 裁剪区域遮罩
-                    Rectangle()
-                        .fill(.black.opacity(0.5))
-                        .overlay(
-                            Rectangle()
-                                .frame(width: cropRect.width, height: cropRect.height)
-                                .blendMode(.destinationOut)
-                        )
-                        .compositingGroup()
-                    
                     // 图片
                     Image(uiImage: image)
                         .resizable()
@@ -138,7 +128,7 @@ struct ImageCropperView: View {
                                     )
                                     scale = max(minScale, scale)
                                     
-                                    // 调整偏移量确保图片覆盖裁剪区域
+                                    // 调整偏移量确���图片覆盖裁剪区域
                                     let scaledWidth = imageViewSize.width * scale
                                     let scaledHeight = imageViewSize.height * scale
                                     
@@ -151,13 +141,18 @@ struct ImageCropperView: View {
                                 }
                         )
                     
-                    // 裁剪框
+                    // 裁剪区域遮罩
+                    CropMask(cropRect: cropRect)
+                    
+                    // 裁剪框边框
                     Rectangle()
-                        .stroke(.white, lineWidth: 2)
+                        .stroke(.white, lineWidth: 1)
                         .frame(width: cropRect.width, height: cropRect.height)
+                        .position(x: cropRect.midX, y: cropRect.midY)
                     
                     // 九宫格辅助线
                     GridLines(rect: cropRect)
+                        .position(x: cropRect.midX, y: cropRect.midY)
                 }
                 .clipShape(Rectangle())
             }
@@ -245,5 +240,25 @@ struct ImageCropperView: View {
         
         onCrop(croppedImage)
         dismiss()
+    }
+}
+
+// 新增裁剪遮罩视图
+struct CropMask: View {
+    let cropRect: CGRect
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let path = Path { path in
+                // 整个视图的矩形
+                path.addRect(CGRect(origin: .zero, size: geometry.size))
+                
+                // 裁剪区域（从整个区域中减去）
+                path.addRect(cropRect)
+            }
+            
+            path.fill(style: FillStyle(eoFill: true))
+                .foregroundColor(.black.opacity(0.5))
+        }
     }
 } 
