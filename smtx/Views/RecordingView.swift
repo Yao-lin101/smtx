@@ -91,12 +91,17 @@ struct RecordingView: View {
             Spacer()
             
             // 底部录音区域
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 // 示波图区域（录音时显示）
                 if audioRecorder.isRecording {
                     WaveformView(levels: audioRecorder.audioLevels)
                         .frame(height: 100)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.black.opacity(0.08))
+                        )
+                        .padding(.horizontal, 8)
                 }
                 
                 // 控制按钮
@@ -136,17 +141,9 @@ struct RecordingView: View {
                         }
                     } else {
                         // 录音按钮
-                        Button {
-                            withAnimation(.spring()) {
-                                if audioRecorder.isRecording {
-                                    stopRecording()
-                                } else {
-                                    startRecording()
-                                }
-                            }
-                        } label: {
+                        Button(action: audioRecorder.isRecording ? stopRecording : startRecording) {
                             Circle()
-                                .fill(audioRecorder.isRecording ? Color.red : Color.accentColor)
+                                .fill(audioRecorder.isRecording ? .red : .accentColor)
                                 .frame(width: 80, height: 80)
                                 .overlay {
                                     RoundedRectangle(cornerRadius: audioRecorder.isRecording ? 4 : 40)
@@ -158,12 +155,6 @@ struct RecordingView: View {
                     }
                 }
                 .padding(.bottom, 40)
-            }
-            .background {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .frame(height: overlayHeight + 160)
-                    .ignoresSafeArea()
             }
         }
         .navigationBarTitleDisplayMode(.inline)

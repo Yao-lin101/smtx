@@ -9,7 +9,8 @@ class AudioRecorder: ObservableObject {
     private(set) var recordingURL: URL?
     
     @Published var isRecording = false
-    @Published var audioLevels: [CGFloat] = Array(repeating: 0, count: 30)
+    @Published var audioLevels: [CGFloat] = []
+    private let maxLevels = 100
     
     init() {
         setupAudioSession()
@@ -44,19 +45,23 @@ class AudioRecorder: ObservableObject {
         
         let normalizeSample = { (sample: Float) -> CGFloat in
             let absolute = abs(sample)
-            return CGFloat(absolute)
+            let scaled = pow(absolute, 0.5) * 1.2
+            return CGFloat(min(scaled, 1.0))
         }
         
-        // 计算音频样本的平均值
-        var sum: Float = 0
+        // 计算音频样本的峰值
+        var peak: Float = 0
         for i in 0..<channelDataCount {
-            sum += abs(channelData[i])
+            peak = max(peak, abs(channelData[i]))
         }
-        let average = sum / Float(channelDataCount)
         
-        // 更新音频电平数组
-        audioLevels.removeFirst()
-        audioLevels.append(normalizeSample(average))
+        let newLevel = normalizeSample(peak)
+        
+        if audioLevels.count >= maxLevels {
+            audioLevels.removeFirst()
+        }
+        
+        audioLevels.append(newLevel)
     }
     
     func startRecording(url: URL) {
@@ -91,8 +96,8 @@ class AudioRecorder: ObservableObject {
         isRecording = false
         print("✅ AudioRecorder - Recording stopped")
         
-        // 重置音频电平
-        audioLevels = Array(repeating: 0, count: 30)
+        // 清空音频电平数组
+        audioLevels.removeAll()
     }
 }
 
@@ -101,14 +106,21 @@ struct WaveformView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            HStack(spacing: 4) {
-                ForEach(levels.indices, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 2)
+            let availableWidth = geometry.size.width - 4
+            let barWidth = max(1, availableWidth / CGFloat(200))
+            let spacing = max(0, barWidth / 2)
+            
+            HStack(spacing: spacing) {
+                ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
+                    Rectangle()
                         .fill(Color.red)
-                        .frame(width: 4, height: geometry.size.height * levels[index])
+                        .frame(width: barWidth)
+                        .frame(height: geometry.size.height * 0.4 * level)
+                        .frame(maxHeight: .infinity, alignment: .center)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 2)
         }
     }
 } 
