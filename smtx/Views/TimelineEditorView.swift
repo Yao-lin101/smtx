@@ -37,73 +37,90 @@ struct TimelineEditorView: View {
                 
                 // 表单区域
                 VStack(spacing: 12) {
-                    // 图片选择器
-                    PhotosPicker(selection: $selectedImage,
-                               matching: .images,
-                               photoLibrary: .shared()) {
-                        if let previewImage = previewImage {
-                            previewImage
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        } else if let previousImage = getImageForCurrentTime() {
-                            Image(uiImage: previousImage)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .opacity(0.5)
-                                .overlay(
-                                    Text("点击更换图片\n不更换则沿用上一张图片")
-                                        .font(.caption)
-                                        .multilineTextAlignment(.center)
-                                        .foregroundColor(.white)
-                                        .padding(8)
-                                        .background(.black.opacity(0.6))
-                                        .cornerRadius(8)
-                                )
-                        } else {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.secondary.opacity(0.2))
-                                .frame(height: 200)
-                                .overlay {
-                                    Image(systemName: "photo")
-                                        .font(.largeTitle)
-                                        .foregroundColor(.secondary)
+                    // 图片和台词区域
+                    ZStack {
+                        VStack(spacing: 12) {
+                            // 图片选择器
+                            PhotosPicker(selection: $selectedImage,
+                                       matching: .images,
+                                       photoLibrary: .shared()) {
+                                if let previewImage = previewImage {
+                                    previewImage
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(height: 200)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                } else if let previousImage = getImageForCurrentTime() {
+                                    Image(uiImage: previousImage)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(height: 200)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .opacity(isEditing ? 0.5 : 1)
+                                        .overlay(
+                                            Group {
+                                                if isEditing {
+                                                    Text("点击更换图片\n不更换则沿用上一张图片")
+                                                        .font(.caption)
+                                                        .multilineTextAlignment(.center)
+                                                        .foregroundColor(.white)
+                                                        .padding(8)
+                                                        .background(.black.opacity(0.6))
+                                                        .cornerRadius(8)
+                                                }
+                                            }
+                                        )
+                                } else {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.secondary.opacity(0.2))
+                                        .frame(height: 200)
+                                        .overlay {
+                                            Image(systemName: "photo")
+                                                .font(.largeTitle)
+                                                .foregroundColor(.secondary)
+                                        }
                                 }
-                        }
-                    }
-                    .disabled(!isEditing && isEditingExistingItem)
-                    
-                    // 台词输入框
-                    TextField("输入台词", text: $script)
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(!isEditing && isEditingExistingItem)
-                    
-                    // 编辑/添加/更新按钮
-                    if isEditingExistingItem {
-                        if isEditing {
+                            }
+                            .disabled(!isEditing && isEditingExistingItem)
+                            
+                            // 台词输入框
+                            TextField("输入台词", text: $script)
+                                .textFieldStyle(.roundedBorder)
+                                .disabled(!isEditing && isEditingExistingItem)
+                            
+                            // 更新/添加按钮 - 始终显示
                             Button(action: addOrUpdateTimelineItem) {
-                                Text("更新")
+                                Text(isEditingExistingItem ? "更新" : "添加")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(script.isEmpty && originalImage == nil)
-                        } else {
-                            Button(action: { isEditing = true }) {
-                                Text("编辑")
-                                    .frame(maxWidth: .infinity)
+                            .disabled((!isEditing && isEditingExistingItem) || (script.isEmpty && originalImage == nil))
+                        }
+                        
+                        // 编辑遮罩层
+                        if isEditingExistingItem && !isEditing {
+                            ZStack {
+                                Rectangle()
+                                    .fill(.thinMaterial)
+                                    .opacity(0.7)
+                                
+                                Color.white.opacity(0.1)
                             }
-                            .buttonStyle(.bordered)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                Text("点击编辑内容")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding(12)
+                                    .background(.black.opacity(0.3))
+                                    .cornerRadius(8)
+                            )
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isEditing = true
+                                }
+                            }
                         }
-                    } else {
-                        Button(action: addOrUpdateTimelineItem) {
-                            Text("添加")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(script.isEmpty && originalImage == nil)
                     }
                 }
                 .padding(.horizontal)
@@ -111,15 +128,18 @@ struct TimelineEditorView: View {
                 // 已添加内容列表
                 List {
                     ForEach(timelineItems.sorted(by: { $0.timestamp < $1.timestamp })) { item in
-                        TimelineItemRow(item: item)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                // 点击跳转到对应时间节点
-                                currentTime = item.timestamp
-                                loadTimelineItem(item)
-                                isEditing = false
-                            }
-                            .listRowInsets(EdgeInsets())
+                        TimelineItemRow(
+                            item: item,
+                            isSelected: item.timestamp == currentTime
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            currentTime = item.timestamp
+                            loadTimelineItem(item)
+                            isEditing = false
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                     .onDelete(perform: deleteTimelineItem)
                 }
@@ -145,12 +165,14 @@ struct TimelineEditorView: View {
                 }
             }
             .onChange(of: currentTime) { newTime in
+                // 时间轴滑动时，加载对应时间点的内容
                 if let item = timelineItems.first(where: { $0.timestamp == newTime }) {
+                    // 加载现有项目的内容
                     loadTimelineItem(item)
                     isEditing = false
                 } else {
-                    // 清空表单，但保持图片沿用状态
-                    script = ""
+                    // 清空表单内容
+                    clearForm()
                     isEditing = true
                 }
             }
@@ -177,18 +199,15 @@ struct TimelineEditorView: View {
     }
     
     private func loadTimelineItem(_ item: TimelineItemData) {
-        script = item.script
+        // 清空之前的状态
+        clearForm()
         
-        // 如果当前项目有图片，则更新图片
+        // 加载新的内容
+        script = item.script
         if let imageData = item.imageData,
            let uiImage = UIImage(data: imageData) {
             originalImage = uiImage
             previewImage = Image(uiImage: uiImage)
-        } else {
-            // 如果当前项目没有图片，清除选择状态
-            // 这样会触发显示沿用上一张图片的提示界面
-            originalImage = nil
-            previewImage = nil
         }
     }
     
@@ -262,6 +281,7 @@ struct TimelineEditorView: View {
     // 时间轴项目行视图
     private struct TimelineItemRow: View {
         let item: TimelineItemData
+        var isSelected: Bool
         
         var body: some View {
             HStack(spacing: 12) {
@@ -302,7 +322,14 @@ struct TimelineEditorView: View {
             .frame(height: 80) // 固定行高
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(Color(UIColor.systemBackground))
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.accentColor.opacity(0.1) : Color(UIColor.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
+            )
         }
     }
     
@@ -347,7 +374,7 @@ struct TimelineSlider: View {
                     .fill(Color.secondary.opacity(0.2))
                     .frame(height: 2)
                 
-                // 已添加内容的标记点
+                // 已添加内容的标记
                 ForEach(markedPositions, id: \.self) { position in
                     Circle()
                         .fill(.blue)

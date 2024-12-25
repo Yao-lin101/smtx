@@ -52,41 +52,47 @@ struct TimelinePreviewView: View {
 
 private struct TimelinePreviewItem: View {
     let item: TimelineItemData
-    let image: UIImage? // 修改为直接接收 UIImage
+    let image: UIImage?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // 图片预览
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 120, height: 68) // 16:9 比例
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: 120, height: 68)
-                    .overlay {
-                        Image(systemName: "photo")
-                            .foregroundColor(.secondary)
-                    }
-            }
-            
-            // 台词和时间点预览
-            VStack(alignment: .leading, spacing: 2) {
-                if !item.script.isEmpty {
-                    Text(item.script)
-                        .font(.caption)
-                        .lineLimit(2)
-                        .frame(width: 120, alignment: .leading)
+            // 图片预览 - 固定高度
+            ZStack {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 120, height: 68) // 16:9 比例
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(width: 120, height: 68)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .foregroundColor(.secondary)
+                        }
                 }
+            }
+            .frame(width: 120, height: 68)
+            
+            // 台词和时间点预览 - 固定高度
+            VStack(alignment: .leading, spacing: 2) {
+                // 台词区域 - 固定高度，无台词时留空
+                Text(item.script)
+                    .font(.caption)
+                    .lineLimit(2)
+                    .frame(width: 120, height: 32, alignment: .topLeading)
+                
+                // 时间戳 - 固定在底部
                 Text(formatTimestamp(item.timestamp))
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(width: 120, alignment: .center)
             }
+            .frame(height: 52) // 固定总高度：台词32 + 间距2 + 时间戳18
         }
+        .frame(width: 120) // 固定总宽度
     }
     
     private func formatTimestamp(_ timestamp: Double) -> String {
