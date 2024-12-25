@@ -72,7 +72,7 @@ struct CreateTemplateView: View {
                         if hasUnsavedChanges() {
                             showingCancelAlert = true
                         } else {
-                            cancelAndDismiss()
+                            dismiss()
                         }
                     }) {
                         Text("取消")
@@ -90,7 +90,7 @@ struct CreateTemplateView: View {
             .alert("是否保存更改？", isPresented: $showingCancelAlert) {
                 Button("取消", role: .cancel) { }
                 Button("不保存", role: .destructive) {
-                    cancelAndDismiss()
+                    dismiss()
                 }
                 Button("保存") {
                     saveTemplate()
@@ -99,11 +99,13 @@ struct CreateTemplateView: View {
                 Text("您对模板进行了修改，是否要保存这些更改？")
             }
             .sheet(isPresented: $showingTimelineEditor) {
-                TimelineEditorView(
-                    templateId: templateId ?? "",
-                    totalDuration: Double(selectedMinutes * 60 + selectedSeconds),
-                    timelineItems: $timelineItems
-                )
+                if let id = templateId {
+                    TimelineEditorView(
+                        templateId: id,
+                        totalDuration: Double(selectedMinutes * 60 + selectedSeconds),
+                        timelineItems: $timelineItems
+                    )
+                }
             }
             .sheet(isPresented: $showingCropper) {
                 if let image = tempUIImage {
@@ -134,33 +136,9 @@ struct CreateTemplateView: View {
             .onAppear {
                 if existingTemplateId != nil {
                     loadExistingTemplate()
-                } else {
-                    createNewTemplate()
                 }
-                // 保存初始状态
                 saveInitialState()
             }
-        }
-    }
-    
-    private func createNewTemplate() {
-        // 创建一个默认的纯色图片作为临时封面
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 300))
-        let defaultCoverImage = renderer.image { context in
-            UIColor.systemGray5.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 400, height: 300))
-        }
-        
-        do {
-            print("📝 Creating new template with title: \(title)")
-            templateId = try TemplateStorage.shared.createTemplate(
-                title: title,
-                language: language,
-                coverImage: defaultCoverImage
-            )
-            print("✅ Template created with ID: \(templateId ?? "")")
-        } catch {
-            print("❌ Failed to create template: \(error)")
         }
     }
     
@@ -212,7 +190,7 @@ struct CreateTemplateView: View {
             if existingTemplateId != nil {
                 try updateExistingTemplate()
             } else {
-                try updateExistingTemplate()
+                try createAndUpdateTemplate()
             }
             
             // 发送模板更新通知并关闭视图
@@ -241,6 +219,25 @@ struct CreateTemplateView: View {
         )
         
         print("✅ Template updated with new duration")
+    }
+    
+    private func createAndUpdateTemplate() throws {
+        // 1. 创建默认封面图片
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 300))
+        let defaultCoverImage = renderer.image { context in
+            UIColor.systemGray5.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 400, height: 300))
+        }
+        
+        // 2. 创建新模板
+        templateId = try TemplateStorage.shared.createTemplate(
+            title: title,
+            language: language,
+            coverImage: defaultCoverImage
+        )
+        
+        // 3. 更新模板内容
+        try updateExistingTemplate()
     }
     
     private func saveInitialState() {
@@ -275,13 +272,6 @@ struct CreateTemplateView: View {
         
         // 如果所有检查都通过，说明没有更改
         return false
-    }
-    
-    private func cancelAndDismiss() {
-        if existingTemplateId == nil, let templateId = templateId {
-            try? TemplateStorage.shared.deleteTemplate(templateId: templateId)
-        }
-        dismiss()
     }
     
     private var titleSection: some View {
@@ -328,8 +318,8 @@ struct CreateTemplateView: View {
                     }
                     .frame(maxWidth: geometry.size.width * 0.5, alignment: .leading)
                     
-                    // 添加/编辑时间轴按钮
-                    Button(action: { showingTimelineEditor = true }) {
+                    // 修改添加/编辑时间轴按钮
+                    Button(action: handleTimelineEdit) {
                         Label(timelineItems.isEmpty ? "添加时间轴" : "编辑时间轴", 
                               systemImage: timelineItems.isEmpty ? "plus.circle.fill" : "pencil.circle.fill")
                             .font(.headline)
@@ -339,6 +329,7 @@ struct CreateTemplateView: View {
                             .foregroundColor(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
+                    .disabled(title.isEmpty) // 禁用按钮如果标题为空
                 }
             }
             .frame(height: 120) // 设置固定高度以匹配 Picker 的高度
@@ -485,7 +476,7 @@ struct CreateTemplateView: View {
         
         // 2. 验证并添加每个标签
         for tag in newTags {
-            // 验证标签长度（1-15个字符���
+            // 验证标签长度（1-15个字符）
             guard (1...15).contains(tag.count) else { continue }
             
             // 验证是否已存在
@@ -519,6 +510,22 @@ struct CreateTemplateView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+        }
+    }
+    
+    // 添加新方法：处理时间轴编辑
+    private func handleTimelineEdit() {
+        if templateId == nil {
+            // 如果模板还未创建，先创建模板
+            do {
+                try createAndUpdateTemplate()
+                showingTimelineEditor = true
+            } catch {
+                print("❌ Failed to create template before timeline editing: \(error)")
+            }
+        } else {
+            // 如果模板已存在，直接显示编辑器
+            showingTimelineEditor = true
         }
     }
 }

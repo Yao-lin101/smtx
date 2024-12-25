@@ -285,7 +285,7 @@ struct TimelineEditorView: View {
     }
 }
 
-// 自定��时间轴滑块
+// 自定义时间轴滑块
 struct TimelineSlider: View {
     @Binding var value: Double
     let bounds: ClosedRange<Double>
