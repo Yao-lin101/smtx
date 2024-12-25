@@ -4,6 +4,7 @@ import CoreData
 
 struct RecordingView: View {
     let template: Template
+    let recordId: String?
     @Environment(\.dismiss) private var dismiss
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var currentTime: Double = 0
@@ -62,7 +63,7 @@ struct RecordingView: View {
                 VStack(spacing: 4) {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
-                            // 背景条
+                            // 
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(Color.secondary.opacity(0.2))
                                 .frame(height: 4)
@@ -90,78 +91,134 @@ struct RecordingView: View {
             
             Spacer()
             
-            // 底部录音区域
+            // 底部控制区域
             VStack(spacing: 20) {
-                // 示波图区域（录音时显示）
-                if audioRecorder.isRecording {
-                    WaveformView(levels: audioRecorder.audioLevels)
-                        .frame(height: 100)
-                        .padding(.horizontal, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.black.opacity(0.08))
-                        )
-                        .padding(.horizontal, 8)
-                }
+                // 示波图区域 (录音和预览都显示)
+                WaveformView(levels: audioRecorder.audioLevels)
+                    .frame(height: 100)
+                    .padding(.horizontal, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.08))
+                    )
+                    .padding(.horizontal, 8)
+                    .opacity(audioRecorder.isRecording ? 1 : 0) // 只在录音时显示
                 
-                // 控制按钮
+                // 控制按钮区域
                 HStack(spacing: 40) {
-                    if isPreviewMode {
-                        // 返回按钮
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        // 播放/暂停按钮
-                        Button {
-                            if let player = previewPlayer {
-                                if player.isPlaying {
-                                    pausePreview()
-                                } else {
-                                    startPreview()
+                    Group {
+                        if isPreviewMode {
+                            // 预览模式按钮组
+                            HStack(spacing: 40) {
+                                // 波形图按钮
+                                Button {
+                                    // TODO: 显示波形图
+                                } label: {
+                                    Image(systemName: "waveform")
+                                        .font(.title)
+                                        .foregroundColor(.blue)
+                                }
+                                
+                                // 后退15秒
+                                Button {
+                                    if let player = previewPlayer {
+                                        let newTime = max(0, player.currentTime - 15)
+                                        player.currentTime = newTime
+                                        currentTime = newTime
+                                        updateTimelineContent()
+                                    }
+                                } label: {
+                                    Image(systemName: "gobackward.15")
+                                        .font(.title)
+                                }
+                                
+                                // 播放/暂停按钮
+                                Button {
+                                    if let player = previewPlayer {
+                                        if player.isPlaying {
+                                            pausePreview()
+                                        } else {
+                                            startPreview()
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: previewPlayer?.isPlaying == true ? "pause.fill" : "play.fill")
+                                        .font(.system(size: 40))
+                                }
+                                
+                                // 前进15秒
+                                Button {
+                                    if let player = previewPlayer {
+                                        let newTime = min(recordedDuration, player.currentTime + 15)
+                                        player.currentTime = newTime
+                                        currentTime = newTime
+                                        updateTimelineContent()
+                                    }
+                                } label: {
+                                    Image(systemName: "goforward.15")
+                                        .font(.title)
+                                }
+                                
+                                // 删除按钮
+                                Button {
+                                    // TODO: 实现删除功能
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.title)
+                                        .foregroundColor(.blue)
                                 }
                             }
-                        } label: {
-                            Image(systemName: previewPlayer?.isPlaying == true ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 80))
-                                .foregroundColor(.accentColor)
-                        }
-                        
-                        // 完成按钮
-                        Button {
-                            saveRecordingAndDismiss()
-                        } label: {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title)
-                                .foregroundColor(.green)
-                        }
-                    } else {
-                        // 录音按钮
-                        Button(action: audioRecorder.isRecording ? stopRecording : startRecording) {
-                            Circle()
-                                .fill(audioRecorder.isRecording ? .red : .accentColor)
-                                .frame(width: 80, height: 80)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: audioRecorder.isRecording ? 4 : 40)
-                                        .fill(Color.white)
-                                        .frame(width: audioRecorder.isRecording ? 30 : 30,
-                                             height: audioRecorder.isRecording ? 30 : 30)
-                                }
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.3)
+                                    .combined(with: .opacity)
+                                    .animation(.spring(response: 0.4, dampingFraction: 0.7)),
+                                removal: .scale(scale: 0.3)
+                                    .combined(with: .opacity)
+                                    .animation(.easeOut(duration: 0.2))
+                            ))
+                        } else {
+                            // 录音按钮
+                            Button(action: audioRecorder.isRecording ? stopRecording : startRecording) {
+                                Circle()
+                                    .fill(audioRecorder.isRecording ? .red : .accentColor)
+                                    .frame(width: 80, height: 80)
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: audioRecorder.isRecording ? 4 : 40)
+                                            .fill(Color.white)
+                                            .frame(width: audioRecorder.isRecording ? 30 : 30,
+                                                 height: audioRecorder.isRecording ? 30 : 30)
+                                    }
+                            }
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.3)
+                                    .combined(with: .opacity)
+                                    .animation(.spring(response: 0.4, dampingFraction: 0.7)),
+                                removal: .scale(scale: 0.3)
+                                    .combined(with: .opacity)
+                                    .animation(.easeOut(duration: 0.2))
+                            ))
                         }
                     }
+                    .animation(
+                        .spring(response: 0.4, dampingFraction: 0.8),
+                        value: isPreviewMode
+                    )
                 }
-                .padding(.bottom, 40)
+                .padding(.horizontal)
             }
+            .padding(.bottom, 40)
         }
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
-                currentItem = firstItem
-                initializeFirstImage()
+            if let recordId = recordId {
+                // 如果有 recordId，加载录音并进入预览模式
+                loadRecordingForPreview(recordId: recordId)
+            } else {
+                // 没有 recordId，初始化为录音模式
+                if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
+                    currentItem = firstItem
+                    initializeFirstImage()
+                }
             }
         }
         .onDisappear {
@@ -224,24 +281,29 @@ struct RecordingView: View {
         // 保存录音时长
         recordedDuration = currentTime
         
-        // 配置音频会话为播放模式
         do {
+            // 先配置音频会话
             try AVAudioSession.sharedInstance().setCategory(.playback)
             try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("❌ Failed to set audio session category: \(error)")
-        }
-        
-        // 准备预览
-        do {
+            
+            // 创建预览播放器
             previewPlayer = try AVAudioPlayer(contentsOf: recordingURL)
-            isPreviewMode = true
-            currentTime = 0
-            if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
-                updateContent(for: firstItem)
+            
+            // 自动保存录音
+            saveRecording { success in
+                if success {
+                    DispatchQueue.main.async { [self] in
+                        // 进入预览模式
+                        isPreviewMode = true
+                        currentTime = 0
+                        if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
+                            updateContent(for: firstItem)
+                        }
+                    }
+                }
             }
         } catch {
-            print("❌ Failed to create preview player: \(error)")
+            print("❌ Failed to prepare preview: \(error)")
         }
     }
     
@@ -373,6 +435,67 @@ struct RecordingView: View {
            let imageData = firstItemWithImage.image,
            let image = UIImage(data: imageData) {
             currentImage = image
+        }
+    }
+    
+    private func loadRecordingForPreview(recordId: String) {
+        if let records = template.records?.allObjects as? [Record],
+           let record = records.first(where: { $0.id == recordId }),
+           let audioData = record.audioData {
+            do {
+                // 创建临时文件
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("preview_\(recordId).m4a")
+                try audioData.write(to: tempURL)
+                
+                // 创建播放器
+                previewPlayer = try AVAudioPlayer(contentsOf: tempURL)
+                recordedDuration = record.duration
+                isPreviewMode = true
+                
+                // 初始化第一帧内容
+                if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
+                    currentItem = firstItem
+                    initializeFirstImage()
+                }
+                
+            } catch {
+                print("❌ Failed to load recording for preview: \(error)")
+            }
+        }
+    }
+    
+    private func saveRecording(completion: @escaping (Bool) -> Void) {
+        do {
+            guard let sourceURL = audioRecorder.recordingURL,
+                  let audioData = try? Data(contentsOf: sourceURL),
+                  let templateId = template.id else {
+                completion(false)
+                return
+            }
+            
+            let recordId = try TemplateStorage.shared.saveRecord(
+                templateId: templateId,
+                duration: recordedDuration,
+                audioData: audioData
+            )
+            
+            print("✅ Recording saved with ID: \(recordId)")
+            
+            // 发送录音完成通知
+            NotificationCenter.default.post(
+                name: .recordingFinished,
+                object: nil,
+                userInfo: ["templateId": templateId]
+            )
+            
+            // 在完成回调之后再删除源文件
+            DispatchQueue.main.async {
+                try? FileManager.default.removeItem(at: sourceURL)
+                completion(true)
+            }
+        } catch {
+            print("❌ Failed to save recording: \(error)")
+            completion(false)
         }
     }
 } 

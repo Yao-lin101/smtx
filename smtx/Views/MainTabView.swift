@@ -25,9 +25,9 @@ struct MainTabView: View {
                             TemplateDetailView(templateId: templateId)
                         case .createTemplate(let language, let templateId):
                             CreateTemplateView(language: language, existingTemplateId: templateId)
-                        case .recording(let templateId):
+                        case .recording(let templateId, let recordId):
                             if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId) {
-                                RecordingView(template: template)
+                                RecordingView(template: template, recordId: recordId)
                             }
                         case .recordDetail(let templateId, let recordId):
                             if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId),

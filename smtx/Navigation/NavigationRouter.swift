@@ -5,7 +5,7 @@ enum Route: Hashable {
     case languageSection(String)
     case templateDetail(String)
     case createTemplate(String, String? = nil)
-    case recording(String)
+    case recording(String, String? = nil)
     case recordDetail(String, String)
     
     func hash(into hasher: inout Hasher) {
@@ -20,9 +20,10 @@ enum Route: Hashable {
             hasher.combine(2)
             hasher.combine(language)
             hasher.combine(templateId)
-        case .recording(let templateId):
+        case .recording(let templateId, let recordId):
             hasher.combine(3)
             hasher.combine(templateId)
+            hasher.combine(recordId)
         case .recordDetail(let templateId, let recordId):
             hasher.combine(4)
             hasher.combine(templateId)
@@ -38,8 +39,8 @@ enum Route: Hashable {
             return l == r
         case (.createTemplate(let l1, let l2), .createTemplate(let r1, let r2)):
             return l1 == r1 && l2 == r2
-        case (.recording(let l), .recording(let r)):
-            return l == r
+        case (.recording(let l1, let l2), .recording(let r1, let r2)):
+            return l1 == r1 && l2 == r2
         case (.recordDetail(let l1, let l2), .recordDetail(let r1, let r2)):
             return l1 == r1 && l2 == r2
         default:

@@ -98,7 +98,9 @@ struct TemplateDetailView: View {
                 ForEach(records.sorted { ($0.createdAt ?? Date()) > ($1.createdAt ?? Date()) }, id: \.id) { record in
                     RecordRow(record: record)
                         .onTapGesture {
-                            router.navigate(to: .recordDetail(templateId, record.id ?? ""))
+                            if let recordId = record.id {
+                                router.navigate(to: .recording(templateId, recordId))
+                            }
                         }
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
@@ -119,7 +121,7 @@ struct TemplateDetailView: View {
     
     private func recordButton(_ template: Template) -> some View {
         Button(action: {
-            router.navigate(to: .recording(templateId))
+            router.navigate(to: .recording(templateId, nil))
         }) {
             HStack {
                 Image(systemName: "record.circle.fill")

@@ -143,7 +143,7 @@ struct LanguageSectionView: View {
             Button {
                 router.navigate(to: .createTemplate(language, template.id))
             } label: {
-                Label("��辑", systemImage: "pencil")
+                Label("编辑", systemImage: "pencil")
             }
             
             Button(role: .destructive) {
@@ -294,7 +294,7 @@ private struct GalleryTemplateRow: View {
             Text(template.title ?? "")
                 .font(.headline)
                 .lineLimit(2)
-                .frame(height: 44, alignment: .topLeading) // ���定两行高度
+                .frame(height: 44, alignment: .topLeading) // 固定两行高度
             
             // 时长和标签区域 - 固定两行高度
             VStack(alignment: .leading, spacing: 4) {
