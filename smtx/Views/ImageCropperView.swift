@@ -159,6 +159,7 @@ struct ImageCropperView: View {
                     // 九宫格辅助线
                     GridLines(rect: cropRect)
                 }
+                .clipShape(Rectangle())
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
