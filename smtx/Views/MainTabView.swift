@@ -29,12 +29,6 @@ struct MainTabView: View {
                             if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId) {
                                 RecordingView(template: template, recordId: recordId)
                             }
-                        case .recordDetail(let templateId, let recordId):
-                            if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId),
-                               let records = template.records?.allObjects as? [Record],
-                               let record = records.first(where: { $0.id == recordId }) {
-                                RecordDetailView(record: record, template: template)
-                            }
                         }
                     }
             }

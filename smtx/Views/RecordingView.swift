@@ -4,7 +4,7 @@ import CoreData
 
 struct RecordingView: View {
     let template: Template
-    let recordId: String?
+    @State var recordId: String?
     @Environment(\.dismiss) private var dismiss
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var currentTime: Double = 0
@@ -16,6 +16,9 @@ struct RecordingView: View {
     @State private var isPreviewMode = false
     @State private var recordedDuration: Double = 0
     @State private var previewPlayer: AVAudioPlayer?
+    @State private var showingDeleteAlert = false
+    @State private var showingWaveform = false
+    @State private var previewLevels: [CGFloat] = []
     
     private var progress: Double {
         template.totalDuration > 0 ? currentTime / template.totalDuration : 0
@@ -63,7 +66,7 @@ struct RecordingView: View {
                 VStack(spacing: 4) {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
-                            // 
+                            // 背景条
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(Color.secondary.opacity(0.2))
                                 .frame(height: 4)
@@ -72,6 +75,7 @@ struct RecordingView: View {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(Color.accentColor)
                                 .frame(width: geometry.size.width * progress, height: 4)
+                                .animation(.linear(duration: 0.1), value: progress)
                         }
                     }
                     .frame(height: 4)
@@ -93,8 +97,8 @@ struct RecordingView: View {
             
             // 底部控制区域
             VStack(spacing: 20) {
-                // 示波图区域 (录音和预览都显示)
-                WaveformView(levels: audioRecorder.audioLevels)
+                // 示波器区域 (根据状态显示)
+                WaveformView(levels: showingWaveform ? previewLevels : audioRecorder.audioLevels)
                     .frame(height: 100)
                     .padding(.horizontal, 4)
                     .background(
@@ -102,7 +106,7 @@ struct RecordingView: View {
                             .fill(Color.black.opacity(0.08))
                     )
                     .padding(.horizontal, 8)
-                    .opacity(audioRecorder.isRecording ? 1 : 0) // 只在录音时显示
+                    .opacity((audioRecorder.isRecording || showingWaveform) ? 1 : 0)
                 
                 // 控制按钮区域
                 HStack(spacing: 40) {
@@ -110,11 +114,11 @@ struct RecordingView: View {
                         if isPreviewMode {
                             // 预览模式按钮组
                             HStack(spacing: 40) {
-                                // 波形图按钮
+                                // 返回按钮
                                 Button {
-                                    // TODO: 显示波形图
+                                    dismiss()
                                 } label: {
-                                    Image(systemName: "waveform")
+                                    Image(systemName: "chevron.backward.circle.fill")
                                         .font(.title)
                                         .foregroundColor(.blue)
                                 }
@@ -161,7 +165,7 @@ struct RecordingView: View {
                                 
                                 // 删除按钮
                                 Button {
-                                    // TODO: 实现删除功能
+                                    showingDeleteAlert = true
                                 } label: {
                                     Image(systemName: "trash")
                                         .font(.title)
@@ -225,6 +229,14 @@ struct RecordingView: View {
             stopRecording()
             stopPreview()
         }
+        .alert("删除录音", isPresented: $showingDeleteAlert) {
+            Button("取消", role: .cancel) { }
+            Button("删除", role: .destructive) {
+                deleteRecording()
+            }
+        } message: {
+            Text("确定要删除这个录音吗？")
+        }
     }
     
     private func startRecording() {
@@ -246,8 +258,8 @@ struct RecordingView: View {
         
         currentTime = 0
         
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            currentTime += 0.1
+        timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { _ in
+            currentTime += 0.03
             updateTimelineContent()
             
             if currentTime >= template.totalDuration {
@@ -358,7 +370,7 @@ struct RecordingView: View {
         
         player.play()
         
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { _ in
             currentTime = player.currentTime
             updateTimelineContent()
             
@@ -443,12 +455,17 @@ struct RecordingView: View {
            let record = records.first(where: { $0.id == recordId }),
            let audioData = record.audioData {
             do {
+                // 首先配置音频会话
+                try AVAudioSession.sharedInstance().setCategory(.playback)
+                try AVAudioSession.sharedInstance().setActive(true)
+                
                 // 创建临时文件
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("preview_\(recordId).m4a")
                 try audioData.write(to: tempURL)
                 
                 // 创建播放器
                 previewPlayer = try AVAudioPlayer(contentsOf: tempURL)
+                previewPlayer?.prepareToPlay() // 添加预加载
                 recordedDuration = record.duration
                 isPreviewMode = true
                 
@@ -473,13 +490,16 @@ struct RecordingView: View {
                 return
             }
             
-            let recordId = try TemplateStorage.shared.saveRecord(
+            let newRecordId = try TemplateStorage.shared.saveRecord(
                 templateId: templateId,
                 duration: recordedDuration,
                 audioData: audioData
             )
             
-            print("✅ Recording saved with ID: \(recordId)")
+            // 保存成功后更新 recordId
+            self.recordId = newRecordId
+            
+            print("✅ Recording saved with ID: \(newRecordId)")
             
             // 发送录音完成通知
             NotificationCenter.default.post(
@@ -496,6 +516,30 @@ struct RecordingView: View {
         } catch {
             print("❌ Failed to save recording: \(error)")
             completion(false)
+        }
+    }
+    
+    private func deleteRecording() {
+        guard let recordId = recordId,
+              let records = template.records?.allObjects as? [Record],
+              let record = records.first(where: { $0.id == recordId }) else { return }
+        
+        do {
+            try TemplateStorage.shared.deleteRecord(record)  // 直接传入 Record 对象
+            
+            // 发送录音更新通知
+            if let templateId = template.id {
+                NotificationCenter.default.post(
+                    name: .recordingFinished,
+                    object: nil,
+                    userInfo: ["templateId": templateId]
+                )
+            }
+            
+            // 关闭预览页面
+            dismiss()
+        } catch {
+            print("❌ Failed to delete recording: \(error)")
         }
     }
 } 
