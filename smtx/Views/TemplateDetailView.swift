@@ -3,8 +3,13 @@ import SwiftUI
 struct TemplateDetailView: View {
     let template: TemplateFile
     @EnvironmentObject private var router: NavigationRouter
-    @State private var showingDeleteAlert = false
     @State private var coverImage: UIImage?
+    @State private var currentTemplate: TemplateFile
+    
+    init(template: TemplateFile) {
+        self.template = template
+        self._currentTemplate = State(initialValue: template)
+    }
     
     var body: some View {
         ZStack {
@@ -15,18 +20,18 @@ struct TemplateDetailView: View {
                     
                     // 时间轴预览
                     TimelinePreviewView(
-                        timelineItems: template.template.timelineItems.map { item in
+                        timelineItems: currentTemplate.template.timelineItems.map { item in
                             TimelineItemData(
                                 script: item.script,
                                 imageURL: getImageURL(for: item),
                                 timestamp: item.timestamp
                             )
                         },
-                        totalDuration: template.template.totalDuration
+                        totalDuration: currentTemplate.template.totalDuration
                     )
                     
                     // 录音记录列表
-                    if !template.records.isEmpty {
+                    if !currentTemplate.records.isEmpty {
                         recordListSection
                     }
                     
@@ -42,7 +47,7 @@ struct TemplateDetailView: View {
                 recordButton
             }
         }
-        .navigationTitle(template.template.title)
+        .navigationTitle(currentTemplate.template.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             loadCoverImage()
@@ -51,13 +56,19 @@ struct TemplateDetailView: View {
             // 清理图片缓存
             coverImage = nil
         }
-        .alert("删除录音", isPresented: $showingDeleteAlert) {
-            Button("取消", role: .cancel) { }
-            Button("删除", role: .destructive) {
-                deleteRecord()
+        .onReceive(NotificationCenter.default.publisher(for: .recordingFinished)) { notification in
+            if let updatedTemplate = notification.object as? TemplateFile {
+                currentTemplate = updatedTemplate
+                print("✅ Template updated from notification")
+            } else {
+                // 如果通知中没有模板数据，则重新加载
+                do {
+                    currentTemplate = try TemplateStorage.shared.loadTemplate(templateId: template.metadata.id)
+                    print("✅ Template reloaded from storage")
+                } catch {
+                    print("❌ Failed to reload template after recording: \(error)")
+                }
             }
-        } message: {
-            Text("确定要删除这条录音吗？")
         }
     }
     
@@ -85,12 +96,28 @@ struct TemplateDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("录音记录")
                 .font(.headline)
+                .padding(.horizontal)
             
-            ForEach(template.records) { record in
-                NavigationLink(value: Route.recordDetail(template.metadata.id, record)) {
-                    RecordRow(record: record)
+            List {
+                ForEach(Array(currentTemplate.records.enumerated()), id: \.element.id) { index, record in
+                    NavigationLink(value: Route.recordDetail(currentTemplate.metadata.id, record)) {
+                        RecordRow(record: record)
+                            .listRowInsets(EdgeInsets())
+                            .padding(.vertical, 4)
+                    }
+                    .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            deleteRecord(at: index)
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                    }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .frame(height: CGFloat(currentTemplate.records.count) * 60 + 16)
         }
     }
     
@@ -140,8 +167,29 @@ struct TemplateDetailView: View {
         return baseURL.appendingPathComponent(item.image)
     }
     
-    private func deleteRecord() {
-        // TODO: 删除录音的实现
+    private func deleteRecord(at index: Int) {
+        do {
+            // 获取模板目录
+            guard let templateDir = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
+                print("❌ Failed to get template directory")
+                return
+            }
+            
+            // 尝试删除录音文件（如果存在）
+            let audioURL = templateDir.appendingPathComponent(currentTemplate.records[index].audioFile)
+            try? FileManager.default.removeItem(at: audioURL)
+            
+            // 从模板数据中删除记录
+            var updatedTemplate = currentTemplate
+            updatedTemplate.records.remove(at: index)
+            try TemplateStorage.shared.saveTemplate(updatedTemplate)
+            
+            // 重新从磁盘加载模板数据
+            currentTemplate = try TemplateStorage.shared.loadTemplate(templateId: template.metadata.id)
+            print("✅ Record removed from template")
+        } catch {
+            print("❌ Failed to update template: \(error)")
+        }
     }
 }
 
@@ -164,10 +212,8 @@ struct RecordRow: View {
                 .font(.title2)
                 .foregroundColor(.accentColor)
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .padding(.horizontal)
+        .frame(height: 52)
     }
     
     private func formatDuration(_ duration: Double) -> String {

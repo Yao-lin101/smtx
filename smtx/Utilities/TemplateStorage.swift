@@ -5,6 +5,7 @@ import UIKit
 
 extension Notification.Name {
     static let templateDidUpdate = Notification.Name("templateDidUpdate")
+    static let recordingFinished = Notification.Name("recordingFinished")
 }
 
 // MARK: - Models
@@ -368,6 +369,31 @@ class TemplateStorage {
             print("Error deleting templates for language section: \(error)")
         }
     }
+    
+    // 添加录音记录
+    func addRecord(templateId: String, record: RecordData) throws {
+        print("📝 TemplateStorage - Adding record to template: \(templateId)")
+        
+        // 获取模板目录
+        guard let templateDir = getTemplateDirectoryURL(templateId: templateId) else {
+            print("❌ TemplateStorage - Failed to get template directory")
+            throw StorageError.fileNotFound
+        }
+        
+        // 读取现有模板数据
+        let templateURL = templateDir.appendingPathComponent("template.json")
+        var templateData = try Data(contentsOf: templateURL)
+        var template = try JSONDecoder().decode(TemplateFile.self, from: templateData)
+        
+        // 添加新记录
+        template.records.append(record)
+        
+        // 保存更新后的模板数据
+        templateData = try JSONEncoder().encode(template)
+        try templateData.write(to: templateURL)
+        
+        print("✅ TemplateStorage - Record added successfully")
+    }
 }
 
 // MARK: - Errors
@@ -377,4 +403,5 @@ enum StorageError: Error {
     case templateNotFound
     case imageProcessingFailed
     case invalidData
+    case fileNotFound
 } 

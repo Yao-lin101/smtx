@@ -399,6 +399,7 @@
 				DEVELOPMENT_TEAM = 4M7T6PLN38;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要使用麦克风来录制语音";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要访问照片库以保存模板图片";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问照片库以选择模板图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -431,6 +432,7 @@
 				DEVELOPMENT_TEAM = 4M7T6PLN38;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要使用麦克风来录制语音";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要访问照片库以保存模板图片";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问照片库以选择模板图片";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

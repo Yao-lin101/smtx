@@ -232,13 +232,12 @@ struct LanguageSectionView: View {
                 Label("编辑", systemImage: "pencil")
             }
             
-            Button {
+            Button(role: .destructive) {
                 templateToDelete = template
                 showingDeleteAlert = true
             } label: {
                 Label("删除", systemImage: "trash")
             }
-            .tint(.red)
         }
     }
     

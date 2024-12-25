@@ -3,172 +3,391 @@ import AVFoundation
 
 struct RecordingView: View {
     let template: TemplateFile
-    @StateObject private var recorder = AudioRecorder()
-    @State private var currentTime: TimeInterval = 0
-    @State private var timer: Timer?
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var audioRecorder = AudioRecorder()
+    @State private var currentTime: Double = 0
+    @State private var currentItem: TemplateData.TimelineItem?
+    @State private var currentImage: UIImage?
+    @State private var overlayHeight: CGFloat = 0
+    @State private var timer: Timer?
+    @State private var isRecordingStopped = false
+    @State private var isPreviewMode = false
+    @State private var recordedDuration: Double = 0
+    @State private var previewPlayer: AVAudioPlayer?
     
-    var body: some View {
-        VStack(spacing: 24) {
-            // 时间轴预览
-            TimelinePreviewView(
-                timelineItems: template.template.timelineItems.map { item in
-                    TimelineItemData(
-                        script: item.script,
-                        imageURL: getImageURL(for: item),
-                        timestamp: item.timestamp
-                    )
-                },
-                totalDuration: template.template.totalDuration
-            )
-            .padding(.horizontal)
-            
-            // 录音控制面板
-            VStack(spacing: 16) {
-                Text(String(format: "%.1f", currentTime))
-                    .font(.system(size: 48, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
-                
-                // 录音按钮
-                Button(action: recorder.isRecording ? stopRecording : startRecording) {
-                    Image(systemName: recorder.isRecording ? "stop.circle.fill" : "record.circle.fill")
-                        .font(.system(size: 64))
-                        .foregroundColor(.red)
-                }
-            }
-            .padding(32)
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-            .padding()
-        }
-        .navigationTitle("录音")
-        .navigationBarTitleDisplayMode(.inline)
-        .onDisappear {
-            stopRecording()
-        }
+    private var progress: Double {
+        template.template.totalDuration > 0 ? currentTime / template.template.totalDuration : 0
     }
     
-    private func getImageURL(for item: TemplateData.TimelineItem) -> URL? {
-        guard !item.image.isEmpty,
-              let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
-            return nil
+    var body: some View {
+        VStack(spacing: 0) {
+            // 顶部内容区域
+            VStack(spacing: 20) {
+                // 图片区域
+                ZStack {
+                    if let image = currentImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.secondary.opacity(0.2))
+                            .overlay {
+                                Image(systemName: "photo")
+                                    .font(.largeTitle)
+                                    .foregroundColor(.secondary)
+                            }
+                    }
+                }
+                .frame(height: 200)
+                
+                // 台词区域
+                ZStack {
+                    if let script = currentItem?.script {
+                        Text(script)
+                            .font(.body)
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("无台词")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(height: 60)
+                .padding(.horizontal)
+                
+                // 进度条
+                VStack(spacing: 4) {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            // 背景条
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.secondary.opacity(0.2))
+                                .frame(height: 4)
+                            
+                            // 进度条
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.accentColor)
+                                .frame(width: geometry.size.width * progress, height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+                    
+                    // 时间显示
+                    HStack {
+                        Text(formatTime(currentTime))
+                        Spacer()
+                        Text(formatTime(template.template.totalDuration))
+                    }
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical)
+            
+            Spacer()
+            
+            // 底部录音区域
+            VStack(spacing: 16) {
+                // 示波图区域（录音时显示）
+                if audioRecorder.isRecording {
+                    WaveformView(levels: audioRecorder.audioLevels)
+                        .frame(height: 100)
+                        .padding(.horizontal)
+                }
+                
+                // 控制按钮
+                HStack(spacing: 40) {
+                    if isPreviewMode {
+                        // 返回按钮
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        // 播放/暂停按钮
+                        Button {
+                            if let player = previewPlayer {
+                                if player.isPlaying {
+                                    pausePreview()
+                                } else {
+                                    startPreview()
+                                }
+                            }
+                        } label: {
+                            Image(systemName: previewPlayer?.isPlaying == true ? "pause.circle.fill" : "play.circle.fill")
+                                .font(.system(size: 80))
+                                .foregroundColor(.accentColor)
+                        }
+                        
+                        // 完成按钮
+                        Button {
+                            saveRecordingAndDismiss()
+                        } label: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title)
+                                .foregroundColor(.green)
+                        }
+                    } else {
+                        // 录音按钮
+                        Button {
+                            withAnimation(.spring()) {
+                                if audioRecorder.isRecording {
+                                    stopRecording()
+                                } else {
+                                    startRecording()
+                                }
+                            }
+                        } label: {
+                            Circle()
+                                .fill(audioRecorder.isRecording ? Color.red : Color.accentColor)
+                                .frame(width: 80, height: 80)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: audioRecorder.isRecording ? 4 : 40)
+                                        .fill(Color.white)
+                                        .frame(width: audioRecorder.isRecording ? 30 : 30,
+                                             height: audioRecorder.isRecording ? 30 : 30)
+                                }
+                        }
+                    }
+                }
+                .padding(.bottom, 40)
+            }
+            .background {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .frame(height: overlayHeight + 160)
+                    .ignoresSafeArea()
+            }
         }
-        let url = baseURL.appendingPathComponent(item.image)
-        // 确保文件存在
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return nil
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if let firstItem = template.template.timelineItems.first {
+                updateContent(for: firstItem)
+            }
         }
-        return url
+        .onDisappear {
+            stopRecording()
+            stopPreview()
+        }
     }
     
     private func startRecording() {
-        do {
-            try recorder.startRecording()
-            // 启动计时器
-            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                currentTime = recorder.currentTime
+        print("🎙️ Starting recording...")
+        
+        // 重置录音停止标志
+        isRecordingStopped = false
+        
+        // 创建录音文件URL
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("❌ Failed to get documents directory")
+            return
+        }
+        let recordingName = "recording_\(Date().timeIntervalSince1970).m4a"
+        let recordingURL = documentsPath.appendingPathComponent(recordingName)
+        print("📝 Recording will be saved to: \(recordingURL.path)")
+        
+        // 开始录音和时间轴播放
+        audioRecorder.startRecording(url: recordingURL)
+        overlayHeight = 200
+        
+        // 重置时间
+        currentTime = 0
+        
+        // 启动计时器
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            currentTime += 0.1
+            updateTimelineContent()
+            
+            if currentTime >= template.template.totalDuration {
+                stopRecording()
             }
-        } catch {
-            print("Error starting recording: \(error)")
         }
     }
     
     private func stopRecording() {
-        guard recorder.isRecording else { return }
+        // 避免重复调用
+        if isRecordingStopped {
+            return
+        }
+        isRecordingStopped = true
         
+        print("🛑 Stopping recording...")
+        
+        // 停止录音和时间轴播放
+        audioRecorder.stopRecording()
+        overlayHeight = 0
+        
+        // 停止计时器
+        timer?.invalidate()
+        timer = nil
+        
+        // 如果没有实际录音，直接返回
+        guard let recordingURL = audioRecorder.recordingURL else {
+            return
+        }
+        
+        // 保存录音时长
+        recordedDuration = currentTime
+        
+        // 配置音频会话为播放模式
         do {
-            let recordData = try recorder.stopRecording()
-            // TODO: 保存录音数据
-            
-            // 停止并清除计时器
-            timer?.invalidate()
-            timer = nil
-            currentTime = 0
-            
-            // 返回上一页
-            dismiss()
+            try AVAudioSession.sharedInstance().setCategory(.playback)
+            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("Error stopping recording: \(error)")
-        }
-    }
-}
-
-class AudioRecorder: NSObject, ObservableObject {
-    private var audioRecorder: AVAudioRecorder?
-    private var audioURL: URL?
-    @Published var isRecording = false
-    
-    var currentTime: TimeInterval {
-        audioRecorder?.currentTime ?? 0
-    }
-    
-    func startRecording() throws {
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playAndRecord, mode: .default)
-        try audioSession.setActive(true)
-        
-        // 创建临时文件URL
-        let tempDir = FileManager.default.temporaryDirectory
-        audioURL = tempDir.appendingPathComponent(UUID().uuidString + ".m4a")
-        
-        // 录音设置
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100.0,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        
-        guard let url = audioURL else {
-            throw RecordingError.urlCreationFailed
+            print("❌ Failed to set audio session category: \(error)")
         }
         
-        audioRecorder = try AVAudioRecorder(url: url, settings: settings)
-        audioRecorder?.delegate = self
-        
-        if audioRecorder?.record() == true {
-            isRecording = true
-        } else {
-            throw RecordingError.recordingFailed
+        // 准备预览
+        do {
+            previewPlayer = try AVAudioPlayer(contentsOf: recordingURL)
+            isPreviewMode = true
+            currentTime = 0
+            if let firstItem = template.template.timelineItems.first {
+                updateContent(for: firstItem)
+            }
+        } catch {
+            print("❌ Failed to create preview player: \(error)")
         }
     }
     
-    func stopRecording() throws -> Data {
-        guard isRecording else { throw RecordingError.notRecording }
-        guard let url = audioURL else { throw RecordingError.urlCreationFailed }
-        
-        audioRecorder?.stop()
-        isRecording = false
-        
-        // 读取录音文件数据
-        let data = try Data(contentsOf: url)
-        
-        // 清理临时文件
-        try? FileManager.default.removeItem(at: url)
-        
-        return data
-    }
-}
-
-extension AudioRecorder: AVAudioRecorderDelegate {
-    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        if !flag {
-            print("Recording finished unsuccessfully")
+    private func updateTimelineContent() {
+        // 查找当前时间对应的时间轴项目
+        let currentTimeInt = Int(currentTime)
+        if let item = template.template.timelineItems.first(where: { Int($0.timestamp) == currentTimeInt }) {
+            updateContent(for: item)
         }
-        isRecording = false
     }
     
-    func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
-        if let error = error {
-            print("Recording encode error: \(error)")
+    private func updateContent(for item: TemplateData.TimelineItem) {
+        // 只有在项目变化时才更新内容
+        if currentItem?.timestamp != item.timestamp {
+            currentItem = item
+            loadImage(for: item)
         }
-        isRecording = false
     }
-}
-
-enum RecordingError: Error {
-    case urlCreationFailed
-    case recordingFailed
-    case notRecording
+    
+    private func loadImage(for item: TemplateData.TimelineItem) {
+        guard let baseURL = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
+            return
+        }
+        
+        let imageURL = baseURL.appendingPathComponent(item.image)
+        
+        guard let imageData = try? Data(contentsOf: imageURL),
+              let image = UIImage(data: imageData) else {
+            return
+        }
+        
+        currentImage = image
+    }
+    
+    private func formatTime(_ time: Double) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+    
+    private func startPreview() {
+        guard let player = previewPlayer else { return }
+        
+        // 确保音频会话处于活动状态
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("❌ Failed to activate audio session: \(error)")
+        }
+        
+        // 重置时间轴
+        currentTime = 0
+        if let firstItem = template.template.timelineItems.first {
+            updateContent(for: firstItem)
+        }
+        
+        // 开始播放
+        player.play()
+        
+        // 启动计时器
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            currentTime = player.currentTime
+            updateTimelineContent()
+            
+            if currentTime >= recordedDuration {
+                stopPreview()
+            }
+        }
+    }
+    
+    private func pausePreview() {
+        previewPlayer?.pause()
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func stopPreview() {
+        previewPlayer?.stop()
+        timer?.invalidate()
+        timer = nil
+        currentTime = 0
+        if let firstItem = template.template.timelineItems.first {
+            updateContent(for: firstItem)
+        }
+    }
+    
+    private func saveRecordingAndDismiss() {
+        do {
+            // 获取模板���录
+            guard let templateDir = TemplateStorage.shared.getTemplateDirectoryURL(templateId: template.metadata.id) else {
+                print("❌ Failed to get template directory")
+                return
+            }
+            
+            // 生成唯一的录音文件名
+            let recordingName = "recording_\(Date().timeIntervalSince1970).m4a"
+            let destinationURL = templateDir.appendingPathComponent("records").appendingPathComponent(recordingName)
+            
+            // 将录音文件移动到模板目录
+            let sourceURL = audioRecorder.recordingURL
+            
+            print("📦 Moving recording file from: \(sourceURL?.path ?? "nil")")
+            print("📦 to: \(destinationURL.path)")
+            
+            if let sourceURL = sourceURL {
+                try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+                print("✅ Recording file moved successfully")
+                
+                // 创建新的录音记录
+                let record = RecordData(
+                    id: UUID().uuidString,
+                    createdAt: Date(),
+                    duration: recordedDuration,
+                    audioFile: "records/\(recordingName)"
+                )
+                
+                // 更新模板数据
+                var updatedTemplate = try TemplateStorage.shared.loadTemplate(templateId: template.metadata.id)
+                updatedTemplate.records.append(record)
+                try TemplateStorage.shared.saveTemplate(updatedTemplate)
+                print("✅ Record added to template")
+                
+                // 发送录音完成通知
+                NotificationCenter.default.post(name: .recordingFinished, object: updatedTemplate)
+                print("📢 Recording finished notification posted")
+                
+                // 等待一小段时间确保通知被处理
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    dismiss()
+                }
+            } else {
+                print("❌ Recording URL is nil")
+            }
+        } catch {
+            print("❌ Failed to save recording: \(error)")
+        }
+    }
 } 
