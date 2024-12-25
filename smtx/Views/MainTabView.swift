@@ -87,12 +87,13 @@ struct LocalTemplatesView: View {
                     .padding(.vertical, 8)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
+                    Button {
                         languageToDelete = language
                         showingDeleteAlert = true
                     } label: {
                         Label("删除", systemImage: "trash")
                     }
+                    .tint(.red)
                 }
             }
         }
@@ -116,16 +117,15 @@ struct LocalTemplatesView: View {
                 }
             }
         }
-        .alert("删除语言分区", isPresented: $showingDeleteAlert) {
-            Button("取消", role: .cancel) { }
-            Button("删除", role: .destructive) {
+        .confirmationDialog("所有模板和录音记录都将删除。", isPresented: $showingDeleteAlert, titleVisibility: .visible) {
+            Button("删除分区", role: .destructive) {
                 if let language = languageToDelete {
                     deleteLanguageSection(language)
                 }
+                languageToDelete = nil
             }
-        } message: {
-            if let language = languageToDelete {
-                Text("确定要删除「\(language)」分区吗？该分区下的所有模板都将被删除。")
+            Button("取消", role: .cancel) {
+                languageToDelete = nil
             }
         }
         .onAppear {

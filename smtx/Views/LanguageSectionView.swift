@@ -202,14 +202,13 @@ struct LanguageSectionView: View {
                         .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        withAnimation {
-                            templateToDelete = template
-                            showingDeleteAlert = true
-                        }
+                    Button {
+                        templateToDelete = template
+                        showingDeleteAlert = true
                     } label: {
                         Label("删除", systemImage: "trash")
                     }
+                    .tint(.red)
                     
                     Button {
                         router.navigate(to: .createTemplate(language, template))
@@ -233,12 +232,13 @@ struct LanguageSectionView: View {
                 Label("编辑", systemImage: "pencil")
             }
             
-            Button(role: .destructive) {
+            Button {
                 templateToDelete = template
                 showingDeleteAlert = true
             } label: {
                 Label("删除", systemImage: "trash")
             }
+            .tint(.red)
         }
     }
     
