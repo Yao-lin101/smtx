@@ -42,7 +42,7 @@ class AudioRecorder: ObservableObject {
         guard let channelData = buffer.floatChannelData?[0] else { return }
         let channelDataCount = Int(buffer.frameLength)
         
-        var normalizeSample = { (sample: Float) -> CGFloat in
+        let normalizeSample = { (sample: Float) -> CGFloat in
             let absolute = abs(sample)
             return CGFloat(absolute)
         }

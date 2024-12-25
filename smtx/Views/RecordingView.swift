@@ -337,17 +337,20 @@ struct RecordingView: View {
                 return
             }
             
-            try TemplateStorage.shared.saveRecord(
+            let recordId = try TemplateStorage.shared.saveRecord(
                 templateId: templateId,
                 duration: recordedDuration,
                 audioData: audioData
             )
             
-            print("✅ Record added to template")
+            print("✅ Recording saved with ID: \(recordId)")
             
             // 发送录音完成通知
-            NotificationCenter.default.post(name: .recordingFinished, object: template)
-            print("📢 Recording finished notification posted")
+            NotificationCenter.default.post(
+                name: .recordingFinished,
+                object: nil,
+                userInfo: ["templateId": templateId]
+            )
             
             // 等待一小段时间确保通知被处理
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

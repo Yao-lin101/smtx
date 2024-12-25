@@ -238,7 +238,7 @@ struct ImageCropperView: View {
         let renderer = UIGraphicsImageRenderer(size: finalCropRect.size, format: format)
         let croppedImage = renderer.image { context in
             // 将图片绘制到上下文中，只绘制裁剪区域
-            let drawRect = CGRect(origin: .zero, size: finalCropRect.size)
+            let _ = CGRect(origin: .zero, size: finalCropRect.size)
             context.cgContext.translateBy(x: -finalCropRect.minX, y: -finalCropRect.minY)
             image.draw(in: CGRect(origin: .zero, size: imageSize))
         }

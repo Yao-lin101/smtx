@@ -178,7 +178,7 @@ struct TimelineEditorView: View {
     
     private func addOrUpdateTimelineItem() {
         do {
-            let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+            let _ = try TemplateStorage.shared.loadTemplate(templateId: templateId)
             
             // 如果是更新现有项目
             if let index = timelineItems.firstIndex(where: { $0.timestamp == currentTime }) {
