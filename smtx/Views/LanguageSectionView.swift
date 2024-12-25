@@ -119,8 +119,8 @@ struct LanguageSectionView: View {
     @State private var templates: [TemplateFile] = []
     @State private var refreshTrigger = UUID()
     @AppStorage("templateListDisplayMode") private var displayMode: TemplateListDisplayMode = .list
-    @State private var templateToDelete: TemplateFile?
     @State private var showingDeleteAlert = false
+    @State private var templateToDelete: TemplateFile?
     
     private let columns = [
         GridItem(.adaptive(minimum: 160), spacing: 16)
@@ -162,18 +162,16 @@ struct LanguageSectionView: View {
                 loadTemplates()
             }
         }
-        .alert("删除模板", isPresented: $showingDeleteAlert) {
-            Button("取消", role: .cancel) {
-                templateToDelete = nil
-            }
-            Button("删除", role: .destructive) {
+        .confirmationDialog("所有模板和录音记录都将删除。", isPresented: $showingDeleteAlert, titleVisibility: .visible) {
+            Button("删除模板", role: .destructive) {
                 if let template = templateToDelete {
                     deleteTemplate(template)
                 }
                 templateToDelete = nil
             }
-        } message: {
-            Text("确定要删除这个模板吗？该操作无法撤销。")
+            Button("取消", role: .cancel) {
+                templateToDelete = nil
+            }
         }
     }
     
@@ -203,10 +201,12 @@ struct LanguageSectionView: View {
                     TemplateRow(template: template, displayMode: .list)
                         .id("\(template.metadata.id)_\(template.metadata.updatedAt.timeIntervalSince1970)")
                 }
-                .swipeActions(edge: .trailing) {
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
-                        templateToDelete = template
-                        showingDeleteAlert = true
+                        withAnimation {
+                            templateToDelete = template
+                            showingDeleteAlert = true
+                        }
                     } label: {
                         Label("删除", systemImage: "trash")
                     }
@@ -262,7 +262,9 @@ struct LanguageSectionView: View {
     private func deleteTemplate(_ template: TemplateFile) {
         do {
             try TemplateStorage.shared.deleteTemplate(templateId: template.metadata.id)
-            loadTemplates()
+            withAnimation {
+                templates.removeAll { $0.metadata.id == template.metadata.id }
+            }
         } catch {
             print("Error deleting template: \(error)")
         }
