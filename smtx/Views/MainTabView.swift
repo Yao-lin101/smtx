@@ -89,8 +89,15 @@ struct LocalTemplatesView: View {
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
-                        languageToDelete = language
-                        showingDeleteAlert = true
+                        // 检查该语言分区是否有模板
+                        if let templates = templatesByLanguage[language], !templates.isEmpty {
+                            // 有模板时显示确认对话框
+                            languageToDelete = language
+                            showingDeleteAlert = true
+                        } else {
+                            // 没有模板时直接删除
+                            deleteLanguageSection(language)
+                        }
                     } label: {
                         Label("删除", systemImage: "trash")
                     }
