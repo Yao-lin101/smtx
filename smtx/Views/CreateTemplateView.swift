@@ -424,16 +424,22 @@ struct CreateTemplateView: View {
     
     private var tagsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("标签")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            // 标签标题和提示信息
+            VStack(alignment: .leading, spacing: 4) {
+                Text("标签")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Text("添加作品名、角色名等标签便于检索，批量添加可用逗号、顿号、空格、换行符分隔")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             
             // 已添加的标签
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(tags, id: \.self) { tag in
                         TagView(tag: tag) {
-                            // 删除标签
                             if let index = tags.firstIndex(of: tag) {
                                 tags.remove(at: index)
                             }
@@ -443,25 +449,76 @@ struct CreateTemplateView: View {
             }
             
             // 添加新标签
-            HStack {
-                TextField("添加标签", text: $newTag)
-                    .textFieldStyle(.roundedBorder)
-                    .submitLabel(.done)
-                
-                Button(action: addTag) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.accentColor)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    TextField("示例：进击的巨人、利威尔...", text: $newTag)
+                        .textFieldStyle(.roundedBorder)
+                        .submitLabel(.done)
+                        .onSubmit(addTag)
+                        .onChange(of: newTag) { newValue in
+                            // 限制输入长度
+                            if newValue.count > 10 {
+                                newTag = String(newValue.prefix(10))
+                            }
+                        }
+                    
+                    Button(action: addTag) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.accentColor)
+                    }
+                    .disabled(newTag.isEmpty || tags.count >= 10)
                 }
-                .disabled(newTag.isEmpty)
+                
+                // 显示验证提示
+                tagInputPrompt
             }
         }
     }
     
     private func addTag() {
-        let tag = newTag.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tag.isEmpty && !tags.contains(tag) {
+        // 1. 分割输入的文本（支持多种分隔符）
+        let separators = CharacterSet(charactersIn: "、，, \n")
+        let newTags = newTag
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        
+        // 2. 验证并添加每个标签
+        for tag in newTags {
+            // 验证标签长度（1-15个字符���
+            guard (1...15).contains(tag.count) else { continue }
+            
+            // 验证是否已存在
+            guard !tags.contains(tag) else { continue }
+            
+            // 限制标签总数（最多10个）
+            guard tags.count < 10 else { break }
+            
+            // 添加有效标签
             tags.append(tag)
-            newTag = ""
+        }
+        
+        // 清空输入框
+        newTag = ""
+    }
+    
+    // 修改验证提示
+    private var tagInputPrompt: some View {
+        Group {
+            if !newTag.isEmpty {
+                let count = newTag.count
+                if count > 15 {
+                    Text("标签过长")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+            
+            if tags.count >= 10 {
+                Text("最多添加10个标签")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }

@@ -14,18 +14,41 @@ struct LanguageSectionView: View {
     @AppStorage("templateListDisplayMode") private var displayMode: TemplateListDisplayMode = .list
     @State private var showingDeleteAlert = false
     @State private var templateToDelete: Template?
+    @State private var searchText = ""
     
     private let columns = [
         GridItem(.adaptive(minimum: 160), spacing: 16)
     ]
     
+    private var filteredTemplates: [Template] {
+        if searchText.isEmpty {
+            return templates
+        }
+        
+        return templates.filter { template in
+            if let title = template.title?.lowercased(),
+               title.contains(searchText.lowercased()) {
+                return true
+            }
+            
+            let tags = TemplateStorage.shared.getTemplateTags(template)
+            return tags.contains { tag in
+                tag.lowercased().contains(searchText.lowercased())
+            }
+        }
+    }
+    
     var body: some View {
         Group {
-            switch displayMode {
-            case .list:
-                listView
-            case .gallery:
-                galleryView
+            VStack(spacing: 0) {
+                searchBar
+                
+                switch displayMode {
+                case .list:
+                    listView
+                case .gallery:
+                    galleryView
+                }
             }
         }
         .id(refreshTrigger)
@@ -69,7 +92,7 @@ struct LanguageSectionView: View {
     private var galleryView: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(templates, id: \.id) { template in
+                ForEach(filteredTemplates, id: \.id) { template in
                     NavigationLink(value: Route.templateDetail(template.id ?? "")) {
                         TemplateRow(template: template, displayMode: .gallery)
                             .id("\(template.id ?? "")_\(template.updatedAt?.timeIntervalSince1970 ?? 0)")
@@ -87,7 +110,7 @@ struct LanguageSectionView: View {
     
     private var listView: some View {
         List {
-            ForEach(templates, id: \.id) { template in
+            ForEach(filteredTemplates, id: \.id) { template in
                 NavigationLink(value: Route.templateDetail(template.id ?? "")) {
                     TemplateRow(template: template, displayMode: .list)
                         .id("\(template.id ?? "")_\(template.updatedAt?.timeIntervalSince1970 ?? 0)")
@@ -157,6 +180,28 @@ struct LanguageSectionView: View {
         } catch {
             print("❌ Failed to delete template: \(error)")
         }
+    }
+    
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+            
+            TextField("搜索标题或标签", text: $searchText)
+                .textFieldStyle(.plain)
+            
+            if !searchText.isEmpty {
+                Button(action: { searchText = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 }
 
