@@ -4,6 +4,28 @@ struct TimelinePreviewView: View {
     let timelineItems: [TimelineItemData]
     let totalDuration: Double
     
+    // 添加一个方法来获取指定时间点的图片
+    private func getImageForItem(_ currentItem: TimelineItemData) -> UIImage? {
+        // 如果当前项目有图片，直接返回
+        if let imageData = currentItem.imageData,
+           let image = UIImage(data: imageData) {
+            return image
+        }
+        
+        // 如果当前项目没有图片，查找前面最近的带图片的项目
+        let previousItems = timelineItems
+            .filter { $0.timestamp < currentItem.timestamp }
+            .sorted { $0.timestamp > $1.timestamp }
+        
+        if let previousItemWithImage = previousItems.first(where: { $0.imageData != nil }),
+           let imageData = previousItemWithImage.imageData,
+           let image = UIImage(data: imageData) {
+            return image
+        }
+        
+        return nil
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("时间轴预览")
@@ -14,7 +36,10 @@ struct TimelinePreviewView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(timelineItems.sorted(by: { $0.timestamp < $1.timestamp })) { item in
-                            TimelinePreviewItem(item: item)
+                            TimelinePreviewItem(
+                                item: item,
+                                image: getImageForItem(item)
+                            )
                         }
                     }
                     .padding(.horizontal)
@@ -27,12 +52,12 @@ struct TimelinePreviewView: View {
 
 private struct TimelinePreviewItem: View {
     let item: TimelineItemData
+    let image: UIImage? // 修改为直接接收 UIImage
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // 图片预览
-            if let imageData = item.imageData,
-               let image = UIImage(data: imageData) {
+            if let image = image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()

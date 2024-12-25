@@ -47,6 +47,22 @@ struct TimelineEditorView: View {
                                 .scaledToFit()
                                 .frame(height: 200)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                        } else if let previousImage = getImageForCurrentTime() {
+                            Image(uiImage: previousImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .opacity(0.5)
+                                .overlay(
+                                    Text("点击更换图片\n不更换则沿用上一张图片")
+                                        .font(.caption)
+                                        .multilineTextAlignment(.center)
+                                        .foregroundColor(.white)
+                                        .padding(8)
+                                        .background(.black.opacity(0.6))
+                                        .cornerRadius(8)
+                                )
                         } else {
                             RoundedRectangle(cornerRadius: 8)
                                 .fill(Color.secondary.opacity(0.2))
@@ -129,13 +145,12 @@ struct TimelineEditorView: View {
                 }
             }
             .onChange(of: currentTime) { newTime in
-                // 时间轴滑动时，加载对应时间点的内容
                 if let item = timelineItems.first(where: { $0.timestamp == newTime }) {
                     loadTimelineItem(item)
                     isEditing = false
                 } else {
-                    // 清空表单
-                    clearForm()
+                    // 清空表单，但保持图片沿用状态
+                    script = ""
                     isEditing = true
                 }
             }
@@ -163,10 +178,17 @@ struct TimelineEditorView: View {
     
     private func loadTimelineItem(_ item: TimelineItemData) {
         script = item.script
+        
+        // 如果当前项目有图片，则更新图片
         if let imageData = item.imageData,
            let uiImage = UIImage(data: imageData) {
             originalImage = uiImage
             previewImage = Image(uiImage: uiImage)
+        } else {
+            // 如果当前项目没有图片，清除选择状态
+            // 这样会触发显示沿用上一张图片的提示界面
+            originalImage = nil
+            previewImage = nil
         }
     }
     
@@ -215,8 +237,8 @@ struct TimelineEditorView: View {
                 clearForm()
                 isEditing = true
                 
-                // 计算下一个时间点（当前时间+5秒，但不超过总时长）
-                let nextTime = min(currentTime + 5, totalDuration)
+                // 计算下一个时间点（当前时间+3秒，但不超过总时长）
+                let nextTime = min(currentTime + 3, totalDuration)
                 // 如果下一个时间点和当前时间不同，才更新
                 if nextTime != currentTime {
                     currentTime = nextTime
@@ -282,6 +304,24 @@ struct TimelineEditorView: View {
             .padding(.vertical, 8)
             .background(Color(UIColor.systemBackground))
         }
+    }
+    
+    private func getImageForCurrentTime() -> UIImage? {
+        if let image = originalImage {
+            return image
+        }
+        
+        let previousItems = timelineItems
+            .filter { $0.timestamp < currentTime }
+            .sorted { $0.timestamp > $1.timestamp }
+        
+        if let previousItemWithImage = previousItems.first(where: { $0.imageData != nil }),
+           let imageData = previousItemWithImage.imageData,
+           let image = UIImage(data: imageData) {
+            return image
+        }
+        
+        return nil
     }
 }
 

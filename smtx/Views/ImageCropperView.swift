@@ -128,7 +128,7 @@ struct ImageCropperView: View {
                                     )
                                     scale = max(minScale, scale)
                                     
-                                    // 调整偏移量确���图片覆盖裁剪区域
+                                    // 调整偏移量确保图片覆盖裁剪区域
                                     let scaledWidth = imageViewSize.width * scale
                                     let scaledHeight = imageViewSize.height * scale
                                     

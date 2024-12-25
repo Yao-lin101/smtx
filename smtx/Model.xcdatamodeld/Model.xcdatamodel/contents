@@ -26,7 +26,7 @@
         <attribute name="id" attributeType="String"/>
         <attribute name="timestamp" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="script" attributeType="String"/>
-        <attribute name="image" attributeType="Binary"/>
+        <attribute name="image" optional="YES" attributeType="Binary"/>
         
         <relationship name="template" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Template" inverseName="timelineItems" inverseEntity="Template"/>
         

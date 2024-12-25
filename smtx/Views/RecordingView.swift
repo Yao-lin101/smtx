@@ -169,7 +169,8 @@ struct RecordingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if let firstItem = template.timelineItems?.allObjects.first as? TimelineItem {
-                updateContent(for: firstItem)
+                currentItem = firstItem
+                initializeFirstImage()
             }
         }
         .onDisappear {
@@ -257,8 +258,16 @@ struct RecordingView: View {
         // 查找当前时间对应的时间轴项目
         let currentTimeInt = Int(currentTime)
         if let items = template.timelineItems?.allObjects as? [TimelineItem],
-           let item = items.first(where: { Int($0.timestamp) == currentTimeInt }) {
-            updateContent(for: item)
+           let currentItem = items.first(where: { Int($0.timestamp) == currentTimeInt }) {
+            // 更新台词
+            self.currentItem = currentItem
+            
+            // 如果当前项目有图片，则更新图片
+            if let imageData = currentItem.image,
+               let image = UIImage(data: imageData) {
+                currentImage = image
+            }
+            // 如果当前项目没有图片，保持现有图片不变
         }
     }
     
@@ -362,6 +371,17 @@ struct RecordingView: View {
             
         } catch {
             print("❌ Failed to save recording: \(error)")
+        }
+    }
+    
+    private func initializeFirstImage() {
+        guard let items = template.timelineItems?.allObjects as? [TimelineItem] else { return }
+        
+        // 查找第一个包含图片的项目
+        if let firstItemWithImage = items.first(where: { $0.image != nil }),
+           let imageData = firstItemWithImage.image,
+           let image = UIImage(data: imageData) {
+            currentImage = image
         }
     }
 } 
