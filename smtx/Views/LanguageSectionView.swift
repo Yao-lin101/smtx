@@ -17,7 +17,7 @@ struct LanguageSectionView: View {
     @State private var searchText = ""
     
     private let columns = [
-        GridItem(.adaptive(minimum: 160), spacing: 16)
+        GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)
     ]
     
     private var filteredTemplates: [Template] {
@@ -94,7 +94,7 @@ struct LanguageSectionView: View {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(filteredTemplates, id: \.id) { template in
                     NavigationLink(value: Route.templateDetail(template.id ?? "")) {
-                        TemplateRow(template: template, displayMode: .gallery)
+                        GalleryTemplateRow(template: template)
                             .id("\(template.id ?? "")_\(template.updatedAt?.timeIntervalSince1970 ?? 0)")
                     }
                     .buttonStyle(.plain)
@@ -112,7 +112,7 @@ struct LanguageSectionView: View {
         List {
             ForEach(filteredTemplates, id: \.id) { template in
                 NavigationLink(value: Route.templateDetail(template.id ?? "")) {
-                    TemplateRow(template: template, displayMode: .list)
+                    TemplateRow(template: template)
                         .id("\(template.id ?? "")_\(template.updatedAt?.timeIntervalSince1970 ?? 0)")
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -143,7 +143,7 @@ struct LanguageSectionView: View {
             Button {
                 router.navigate(to: .createTemplate(language, template.id))
             } label: {
-                Label("编辑", systemImage: "pencil")
+                Label("��辑", systemImage: "pencil")
             }
             
             Button(role: .destructive) {
@@ -208,95 +208,151 @@ struct LanguageSectionView: View {
 // MARK: - Helper Views
 struct TemplateRow: View {
     let template: Template
-    let displayMode: TemplateListDisplayMode
     
     var body: some View {
-        Group {
-            switch displayMode {
-            case .list:
-                listLayout
-            case .gallery:
-                galleryLayout
-            }
-        }
-    }
-    
-    private var listLayout: some View {
         HStack(spacing: 12) {
-            // 封面缩略图
-            coverImageView(size: 60)
-            
-            // 标题和时长
-            VStack(alignment: .leading, spacing: 4) {
-                Text(template.title ?? "")
-                    .font(.headline)
-                    .lineLimit(2)
-                    .frame(height: 48, alignment: .topLeading)
-                Text(formatDuration(template.totalDuration))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-        }
-        .frame(height: 76)
-        .padding(.vertical, 4)
-    }
-    
-    private var galleryLayout: some View {
-        VStack(spacing: 8) {
-            // 封面缩略图
-            coverImageView(size: 120)
-            
-            // 标题和时长
-            VStack(alignment: .leading, spacing: 4) {
-                Text(template.title ?? "")
-                    .font(.headline)
-                    .lineLimit(2)
-                    .frame(height: 48, alignment: .topLeading)
-                Text(formatDuration(template.totalDuration))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
-        }
-        .frame(height: 200)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-    }
-    
-    private func coverImageView(size: CGFloat) -> some View {
-        Group {
+            // 封面图片
             if let imageData = template.coverImage,
-               let image = UIImage(data: imageData) {
-                Image(uiImage: image)
+               let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size * 4/3, height: size)
+                    .frame(width: 120, height: 90)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: size * 4/3, height: size)
-                    .overlay {
-                        Image(systemName: "photo")
-                            .foregroundColor(.secondary)
-                    }
             }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                // 标题
+                Text(template.title ?? "")
+                    .font(.headline)
+                    .lineLimit(2)
+                
+                HStack(alignment: .center, spacing: 8) {
+                    // 时长
+                    Text(formatDuration(template.totalDuration))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    // 分隔点
+                    if let tags = template.tags as? [String], !tags.isEmpty {
+                        Circle()
+                            .fill(Color.secondary)
+                            .frame(width: 3, height: 3)
+                    }
+                    
+                    // 标签
+                    if let tags = template.tags as? [String] {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(tags, id: \.self) { tag in
+                                    Text(tag)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.accentColor.opacity(0.1))
+                                        .foregroundColor(.accentColor)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Spacer(minLength: 0)
         }
+        .padding(.vertical, 8)
     }
     
     private func formatDuration(_ duration: Double) -> String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
-        if minutes > 0 {
-            return "\(minutes)分\(String(format: "%02d", seconds))秒"
-        } else {
-            return "\(seconds)秒"
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+private struct GalleryTemplateRow: View {
+    let template: Template
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 封面图片
+            if let imageData = template.coverImage,
+               let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 120)
+            }
+            
+            // 标题区域 - 固定两行高度
+            Text(template.title ?? "")
+                .font(.headline)
+                .lineLimit(2)
+                .frame(height: 44, alignment: .topLeading) // ���定两行高度
+            
+            // 时长和标签区域 - 固定两行高度
+            VStack(alignment: .leading, spacing: 4) {
+                // 第一行：时长和第一个标签
+                HStack(spacing: 6) {
+                    Text(formatDuration(template.totalDuration))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    if let tags = template.tags as? [String], !tags.isEmpty {
+                        // 分隔点
+                        Circle()
+                            .fill(Color.secondary)
+                            .frame(width: 3, height: 3)
+                        
+                        // 第一个标签
+                        Text(tags[0])
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.1))
+                            .foregroundColor(.accentColor)
+                            .clipShape(Capsule())
+                            .lineLimit(1)
+                    }
+                }
+                
+                // 第二行：剩余标签的滚动视图
+                if let tags = template.tags as? [String], tags.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(Array(tags.dropFirst()), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .foregroundColor(.accentColor)
+                                    .clipShape(Capsule())
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .frame(height: 20) // 固定第二行高度
+                }
+            }
+            .frame(height: 44, alignment: .topLeading) // 固定总高度
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
