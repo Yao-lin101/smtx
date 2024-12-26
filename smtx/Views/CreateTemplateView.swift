@@ -446,12 +446,6 @@ struct CreateTemplateView: View {
                         .textFieldStyle(.roundedBorder)
                         .submitLabel(.done)
                         .onSubmit(addTag)
-                        .onChange(of: newTag) { newValue in
-                            // 限制输入长度
-                            if newValue.count > 10 {
-                                newTag = String(newValue.prefix(10))
-                            }
-                        }
                     
                     Button(action: addTag) {
                         Image(systemName: "plus.circle.fill")
@@ -496,15 +490,6 @@ struct CreateTemplateView: View {
     // 修改验证提示
     private var tagInputPrompt: some View {
         Group {
-            if !newTag.isEmpty {
-                let count = newTag.count
-                if count > 15 {
-                    Text("标签过长")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-            }
-            
             if tags.count >= 10 {
                 Text("最多添加10个标签")
                     .font(.caption)
