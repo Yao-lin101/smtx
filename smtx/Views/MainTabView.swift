@@ -37,8 +37,8 @@ struct MainTabView: View {
             }
             .tag(1)
             
-            // 个人页面（预留）
-            PlaceholderView(title: "个人中心", message: "即将推出")
+            // 个人中心
+            ProfileView()
                 .tabItem {
                     Label("我的", systemImage: "person")
                 }

@@ -8,12 +8,14 @@
 import SwiftUI
 
 @main
-struct smtxApp: App {
+struct SmtxApp: App {
     @AppStorage("isFirstLaunch") private var isFirstLaunch = true
+    @StateObject private var userStore = UserStore.shared
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
+                .environment(\.userStore, userStore)
                 .onAppear {
                     if isFirstLaunch {
                         setupInitialLanguageSections()
