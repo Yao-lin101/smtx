@@ -25,11 +25,11 @@ struct smtxApp: App {
     
     private func setupInitialLanguageSections() {
         let defaultLanguages = [
-            "英语",
-            "法语",
-            "日语",
-            "德语",
-            "韩语"
+            "English",
+            "Français",
+            "日本語",
+            "Deutsch",
+            "한국어"
         ]
         
         defaultLanguages.forEach { language in
