@@ -61,14 +61,6 @@ class AuthService {
         let encoder = JSONEncoder()
         request.httpBody = try? encoder.encode(body)
         
-        #if DEBUG
-        print("[\(method)] \(url)")
-        if let body = request.httpBody,
-           let json = try? JSONSerialization.jsonObject(with: body, options: []) {
-            print("Request Body:", json)
-        }
-        #endif
-        
         return request
     }
     
@@ -129,20 +121,6 @@ class AuthService {
         
         let (data, response) = try await session.data(for: request)
         
-        #if DEBUG
-        print("Response Status Code:", (response as? HTTPURLResponse)?.statusCode ?? -1)
-        if let dataString = String(data: data, encoding: .utf8) {
-            print("Raw Response Data:", dataString)
-        }
-        if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-            print("Response JSON:", json)
-            // 打印每个字段的类型
-            json.forEach { key, value in
-                print("Field '\(key)' type:", type(of: value))
-            }
-        }
-        #endif
-        
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AuthError.networkError("无效的响应")
         }
@@ -168,49 +146,19 @@ class AuthService {
         
         do {
             let decoder = JSONDecoder()
-            
-            #if DEBUG
-            print("开始解码响应数据")
-            if let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []) {
-                print("原始 JSON:", jsonObject)
-            }
-            #endif
-            
-            let response = try decoder.decode(RegisterResponse.self, from: data)
-            
-            #if DEBUG
-            print("解码成功：")
-            print("- Access Token:", response.access)
-            print("- User ID:", response.user.uid)
-            print("- Email:", response.user.email)
-            #endif
-            
-            return response
+            return try decoder.decode(RegisterResponse.self, from: data)
         } catch {
-            print("解码错误:", error)
             if let decodingError = error as? DecodingError {
                 switch decodingError {
                 case .keyNotFound(let key, let context):
-                    print("缺少键:", key)
-                    print("上下文:", context.debugDescription)
-                    print("编码路径:", context.codingPath)
                     throw AuthError.serverError("缺少字段：\(key.stringValue)")
                 case .typeMismatch(let type, let context):
-                    print("类型不匹配:", type)
-                    print("上下文:", context.debugDescription)
-                    print("编码路径:", context.codingPath)
                     throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
                 case .valueNotFound(let type, let context):
-                    print("值不存在:", type)
-                    print("上下文:", context.debugDescription)
-                    print("编码路径:", context.codingPath)
-                    throw AuthError.serverError("字段��为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
                 case .dataCorrupted(let context):
-                    print("数据损坏:", context.debugDescription)
-                    print("编码路径:", context.codingPath)
                     throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
                 @unknown default:
-                    print("未知解码错误:", decodingError)
                     throw AuthError.serverError("未知解码错误")
                 }
             }
@@ -249,15 +197,7 @@ struct User: Codable {
     }
     
     init(from decoder: Decoder) throws {
-        #if DEBUG
-        print("开始解码 User")
-        #endif
-        
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        #if DEBUG
-        print("可用的键：", container.allKeys.map { $0.stringValue })
-        #endif
         
         uid = try container.decode(String.self, forKey: .uid)
         username = try container.decode(String.self, forKey: .username)
@@ -283,13 +223,6 @@ struct User: Codable {
         
         wechatId = try container.decodeIfPresent(String.self, forKey: .wechatId)
         createdAt = try container.decode(String.self, forKey: .createdAt)
-        
-        #if DEBUG
-        print("User 解码完成")
-        print("- UID:", uid)
-        print("- Email:", email)
-        print("- Created At:", createdAt)
-        #endif
     }
 }
 
@@ -302,27 +235,5 @@ struct RegisterResponse: Codable {
         case refresh
         case access
         case user
-    }
-    
-    init(from decoder: Decoder) throws {
-        #if DEBUG
-        print("开始解码 RegisterResponse")
-        #endif
-        
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        #if DEBUG
-        print("RegisterResponse 可用的键：", container.allKeys.map { $0.stringValue })
-        #endif
-        
-        refresh = try container.decode(String.self, forKey: .refresh)
-        access = try container.decode(String.self, forKey: .access)
-        user = try container.decode(User.self, forKey: .user)
-        
-        #if DEBUG
-        print("RegisterResponse 解码完成")
-        print("- Access Token:", access)
-        print("- User Email:", user.email)
-        #endif
     }
 } 
