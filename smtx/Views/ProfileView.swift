@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var isLoggingIn = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    @State private var showingProfileDetail = false
     
     // 头像相关状态
     @State private var showingImagePicker = false
@@ -105,11 +106,35 @@ struct ProfileView: View {
                         
                         // 功能列表
                         VStack(spacing: 0) {
-                            MenuRow(icon: "gear", title: "设置")
+                            MenuRow(
+                                icon: "person.fill", 
+                                title: "个人资料",
+                                action: { showingProfileDetail = true }
+                            )
                             Divider()
-                            MenuRow(icon: "questionmark.circle", title: "帮助与反馈")
+                            MenuRow(
+                                icon: "gear", 
+                                title: "设置",
+                                action: {
+                                    // TODO: 实现设置功能
+                                }
+                            )
                             Divider()
-                            MenuRow(icon: "info.circle", title: "关于")
+                            MenuRow(
+                                icon: "questionmark.circle", 
+                                title: "帮助与反馈",
+                                action: {
+                                    // TODO: 实现帮助与反馈功能
+                                }
+                            )
+                            Divider()
+                            MenuRow(
+                                icon: "info.circle", 
+                                title: "关于",
+                                action: {
+                                    // TODO: 实现关于功能
+                                }
+                            )
                         }
                         .background(Color(.systemBackground))
                         
@@ -130,6 +155,10 @@ struct ProfileView: View {
                     }
                 }
                 .background(Color(.systemGroupedBackground))
+                .sheet(isPresented: $showingProfileDetail) {
+                    ProfileDetailView()
+                        .environmentObject(userStore)
+                }
                 .sheet(isPresented: $showingImageCropper) {
                     if let image = tempUIImage {
                         ImageCropperView(image: image, aspectRatio: 1) { croppedImage in
@@ -333,9 +362,10 @@ struct StatisticView: View {
 struct MenuRow: View {
     let icon: String
     let title: String
+    var action: () -> Void
     
     var body: some View {
-        Button(action: {}) {
+        Button(action: action) {
             HStack {
                 Image(systemName: icon)
                     .foregroundColor(.blue)

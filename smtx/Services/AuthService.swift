@@ -8,6 +8,8 @@ enum AuthError: LocalizedError {
     case emailExists
     case networkError(String)
     case serverError(String)
+    case unauthorized
+    case usernameExists
     
     var errorDescription: String? {
         switch self {
@@ -23,6 +25,10 @@ enum AuthError: LocalizedError {
             return "网络错误：\(message)"
         case .serverError(let message):
             return "服务器错误：\(message)"
+        case .unauthorized:
+            return "未授权"
+        case .usernameExists:
+            return "该昵称已被使用"
         }
     }
 }
@@ -282,6 +288,49 @@ class AuthService {
         let decoder = JSONDecoder()
         return try decoder.decode(User.self, from: data)
     }
+    
+    func updateProfile(_ data: [String: Any]) async throws -> User {
+        guard let token = TokenManager.shared.accessToken else {
+            throw AuthError.unauthorized
+        }
+        
+        let url = URL(string: "\(baseURL)/users/profile/")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let jsonData = try JSONSerialization.data(withJSONObject: data)
+        request.httpBody = jsonData
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AuthError.networkError("Invalid response")
+        }
+        
+        if httpResponse.statusCode == 400 {
+            if let errorResponse = try? JSONDecoder().decode([String: [String]].self, from: data) {
+                if let usernameErrors = errorResponse["username"] {
+                    throw AuthError.serverError(usernameErrors[0])
+                }
+                if let firstError = errorResponse.first?.value.first {
+                    throw AuthError.serverError(firstError)
+                }
+            }
+            throw AuthError.serverError("更新失败")
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw AuthError.unauthorized
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw AuthError.serverError("更新失败：\(httpResponse.statusCode)")
+        }
+        
+        return try JSONDecoder().decode(User.self, from: data)
+    }
 }
 
 // 请求模型
@@ -297,6 +346,7 @@ struct User: Codable {
     let username: String
     let email: String
     let avatar: String?
+    let bio: String?
     let isEmailVerified: Bool
     let isWechatVerified: Bool
     let wechatId: String?
@@ -307,6 +357,7 @@ struct User: Codable {
         case username
         case email
         case avatar
+        case bio
         case isEmailVerified = "is_email_verified"
         case isWechatVerified = "is_wechat_verified"
         case wechatId = "wechat_id"
@@ -320,6 +371,7 @@ struct User: Codable {
         username = try container.decode(String.self, forKey: .username)
         email = try container.decode(String.self, forKey: .email)
         avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
+        bio = try container.decodeIfPresent(String.self, forKey: .bio)
         
         // 处理布尔值，持数字和布尔类型
         if let boolValue = try? container.decode(Bool.self, forKey: .isEmailVerified) {
