@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileView: View {
-    @StateObject private var userStore = UserStore.shared
+    @EnvironmentObject var userStore: UserStore
     @State private var showingEmailRegister = false
     @State private var emailPrefix = ""
     @State private var selectedDomain = "@qq.com"
@@ -11,13 +11,7 @@ struct ProfileView: View {
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var showingProfileDetail = false
-    
-    // 头像相关状态
-    @State private var showingImagePicker = false
-    @State private var showingImageCropper = false
-    @State private var selectedImage: PhotosPickerItem?
-    @State private var tempUIImage: UIImage?
-    @State private var isUploadingAvatar = false
+    @State private var showingAvatarPreview = false
     
     // 邮箱域名选项
     let emailDomains = [
@@ -41,11 +35,11 @@ struct ProfileView: View {
                     VStack(spacing: 24) {
                         // 用户头像和基本信息
                         VStack(spacing: 16) {
-                            PhotosPicker(selection: $selectedImage,
-                                       matching: .images,
-                                       photoLibrary: .shared()) {
-                                if let user = userStore.currentUser {
-                                    if let avatar = user.avatar, !avatar.isEmpty {
+                            if let user = userStore.currentUser {
+                                if let avatar = user.avatar, !avatar.isEmpty {
+                                    Button {
+                                        showingAvatarPreview = true
+                                    } label: {
                                         AsyncImage(url: URL(string: avatar)) { image in
                                             image
                                                 .resizable()
@@ -57,35 +51,28 @@ struct ProfileView: View {
                                             ProgressView()
                                                 .frame(width: 100, height: 100)
                                         }
-                                    } else {
-                                        Image(systemName: "person.circle.fill")
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.blue)
                                     }
-                                }
-                            }
-                            .onChange(of: selectedImage) { newValue in
-                                Task {
-                                    if let data = try? await newValue?.loadTransferable(type: Data.self),
-                                       let uiImage = UIImage(data: data) {
-                                        tempUIImage = uiImage
-                                        showingImageCropper = true
-                                        selectedImage = nil
+                                    .sheet(isPresented: $showingAvatarPreview) {
+                                        AvatarPreviewView(imageURL: avatar)
                                     }
+                                } else {
+                                    Image(systemName: "person.circle.fill")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 100, height: 100)
+                                        .foregroundColor(.blue)
                                 }
-                            }
-                            .padding(.top, 20)
-                            
-                            if let user = userStore.currentUser {
+                                
                                 VStack(spacing: 8) {
                                     Text(user.username)
                                         .font(.title2)
                                         .bold()
                                     
-                                    Text(user.email)
+                                    Text(user.bio ?? "这个人很懒，什么都没写")
                                         .foregroundColor(.secondary)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal)
                                 }
                             }
                         }
@@ -158,13 +145,6 @@ struct ProfileView: View {
                 .sheet(isPresented: $showingProfileDetail) {
                     ProfileDetailView()
                         .environmentObject(userStore)
-                }
-                .sheet(isPresented: $showingImageCropper) {
-                    if let image = tempUIImage {
-                        ImageCropperView(image: image, aspectRatio: 1) { croppedImage in
-                            uploadAvatar(croppedImage)
-                        }
-                    }
                 }
             } else {
                 // 未登录状态
@@ -315,25 +295,6 @@ struct ProfileView: View {
                     alertMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     showingAlert = true
                     isLoggingIn = false
-                }
-            }
-        }
-    }
-    
-    private func uploadAvatar(_ image: UIImage) {
-        Task {
-            do {
-                isUploadingAvatar = true
-                let updatedUser = try await AuthService.shared.uploadAvatar(image)
-                await MainActor.run {
-                    userStore.updateUserInfo(updatedUser)
-                    isUploadingAvatar = false
-                }
-            } catch {
-                await MainActor.run {
-                    alertMessage = error.localizedDescription
-                    showingAlert = true
-                    isUploadingAvatar = false
                 }
             }
         }
