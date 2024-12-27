@@ -13,26 +13,39 @@ class UserStore: ObservableObject {
     @Published private(set) var isLoading = false
     
     private init() {
+        print("UserStore init: checking token")
         // 检查是否有保存的 token
-        if TokenManager.shared.accessToken != nil {
+        if let token = TokenManager.shared.accessToken {
+            print("Found token:", token)
             Task {
-                await checkAuthState()
+                do {
+                    // 验证 token 并获取用户信息
+                    try await validateToken(token)
+                    print("Token validation successful")
+                } catch {
+                    print("Token validation failed:", error)
+                    await MainActor.run {
+                        self.logout()
+                    }
+                }
             }
+        } else {
+            print("No token found")
         }
     }
     
     // 处理注册成功
     func handleRegisterSuccess(user: User, accessToken: String, refreshToken: String) {
         TokenManager.shared.saveTokens(access: accessToken, refresh: refreshToken)
-        currentUser = user
         isAuthenticated = true
+        currentUser = user
     }
     
     // 处理登录成功
     func handleLoginSuccess(user: User, accessToken: String, refreshToken: String) {
         TokenManager.shared.saveTokens(access: accessToken, refresh: refreshToken)
-        currentUser = user
         isAuthenticated = true
+        currentUser = user
     }
     
     // 登出
@@ -53,11 +66,7 @@ class UserStore: ObservableObject {
         defer { isLoading = false }
         
         do {
-            // TODO: 调用后端 API 验证 token 并获取用户信息
-            // 这里暂时只验证 token 是否存在
-            isAuthenticated = true
-            
-            // 添加一个可能抛出错误的 API 调用
+            // 验证 token 并获取用户信息
             try await validateToken(token)
         } catch {
             logout()
@@ -81,10 +90,42 @@ class UserStore: ObservableObject {
     
     // 验证 token
     private func validateToken(_ token: String) async throws {
-        // TODO: 实现实际的 token 验证逻辑
-        // 这里暂时模拟一个可能失败的验证
-        if token.isEmpty {
-            throw AuthError.networkError("Invalid token")
+        print("Starting token validation")
+        // 调用后端 API 验证 token 并获取用户信息
+        let url = URL(string: "\(AuthService.shared.baseURL)/users/profile/")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("Sending request to:", url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        print("Received response:", response)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("Invalid response type")
+            throw AuthError.networkError("无效的响应")
+        }
+        
+        print("Status code:", httpResponse.statusCode)
+        
+        if httpResponse.statusCode == 401 {
+            print("Token expired")
+            throw AuthError.serverError("Token 已过期")
+        }
+        
+        if httpResponse.statusCode != 200 {
+            print("Validation failed with status code:", httpResponse.statusCode)
+            throw AuthError.serverError("验证失败：\(httpResponse.statusCode)")
+        }
+        
+        let user = try JSONDecoder().decode(User.self, from: data)
+        print("Successfully decoded user:", user)
+        
+        await MainActor.run {
+            print("Setting user and auth state on main actor")
+            self.currentUser = user
+            self.isAuthenticated = true
+            print("Current auth state:", self.isAuthenticated)
+            print("Current user:", self.currentUser as Any)
         }
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProfileView: View {
+    @StateObject private var userStore = UserStore.shared
     @State private var showingEmailRegister = false
     @State private var emailPrefix = ""
     @State private var selectedDomain = "@qq.com"
@@ -8,7 +9,12 @@ struct ProfileView: View {
     @State private var isLoggingIn = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    @Environment(\.userStore) private var userStore
+    
+    // 头像相关状态
+    @State private var showingImagePicker = false
+    @State private var showingImageCropper = false
+    @State private var selectedImage: UIImage?
+    @State private var isUploadingAvatar = false
     
     // 邮箱域名选项
     let emailDomains = [
@@ -32,12 +38,32 @@ struct ProfileView: View {
                     VStack(spacing: 24) {
                         // 用户头像和基本信息
                         VStack(spacing: 16) {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 100, height: 100)
-                                .foregroundColor(.blue)
-                                .padding(.top, 20)
+                            Button(action: {
+                                showingImagePicker = true
+                            }) {
+                                if let user = userStore.currentUser {
+                                    if let avatar = user.avatar, !avatar.isEmpty {
+                                        AsyncImage(url: URL(string: avatar)) { image in
+                                            image
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: 100, height: 100)
+                                                .clipShape(Circle())
+                                                .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                                        } placeholder: {
+                                            ProgressView()
+                                                .frame(width: 100, height: 100)
+                                        }
+                                    } else {
+                                        Image(systemName: "person.circle.fill")
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(width: 100, height: 100)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                            .padding(.top, 20)
                             
                             if let user = userStore.currentUser {
                                 VStack(spacing: 8) {
@@ -92,6 +118,21 @@ struct ProfileView: View {
                     }
                 }
                 .background(Color(.systemGroupedBackground))
+                .sheet(isPresented: $showingImagePicker) {
+                    ImagePicker(image: $selectedImage, isPresented: $showingImagePicker)
+                        .onChange(of: selectedImage) { newImage in
+                            if let image = newImage {
+                                showingImageCropper = true
+                            }
+                        }
+                }
+                .sheet(isPresented: $showingImageCropper) {
+                    if let image = selectedImage {
+                        ImageCropperView(image: image, aspectRatio: 1) { croppedImage in
+                            uploadAvatar(croppedImage)
+                        }
+                    }
+                }
             } else {
                 // 未登录状态
                 VStack(spacing: 24) {
@@ -241,6 +282,25 @@ struct ProfileView: View {
                     alertMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     showingAlert = true
                     isLoggingIn = false
+                }
+            }
+        }
+    }
+    
+    private func uploadAvatar(_ image: UIImage) {
+        Task {
+            do {
+                isUploadingAvatar = true
+                let updatedUser = try await AuthService.shared.uploadAvatar(image)
+                await MainActor.run {
+                    userStore.updateUserInfo(updatedUser)
+                    isUploadingAvatar = false
+                }
+            } catch {
+                await MainActor.run {
+                    alertMessage = error.localizedDescription
+                    showingAlert = true
+                    isUploadingAvatar = false
                 }
             }
         }

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 enum AuthError: LocalizedError {
     case invalidEmail
@@ -30,9 +31,9 @@ class AuthService {
     static let shared = AuthService()
     
     #if DEBUG
-    private let baseURL = "http://192.168.1.102:8000/api"  // 使用服务器的局域网 IP
+    let baseURL = "http://192.168.1.102:8000/api"  // 使用服务器的局域网 IP
     #else
-    private let baseURL = "https://api.example.com/api"  // 生产环境（待配置）
+    let baseURL = "https://api.example.com/api"  // 生产环境（待配置）
     #endif
     
     private let session: URLSession
@@ -226,6 +227,60 @@ class AuthService {
             }
             throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
         }
+    }
+    
+    func uploadAvatar(_ image: UIImage) async throws -> User {
+        // 将图片转换为 JPEG 数据
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw AuthError.serverError("图片处理失败")
+        }
+        
+        // 创建 multipart/form-data 请求
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: URL(string: "\(baseURL)/users/upload_avatar/")!)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        // 添加认证头
+        if let token = TokenManager.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        // 构建请求体
+        var body = Data()
+        
+        // 添加文件数据
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        
+        // 结束标记
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AuthError.networkError("无效的响应")
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw AuthError.serverError("请重新登录")
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
+               let errorMessage = errorResponse["error"] {
+                throw AuthError.serverError(errorMessage)
+            }
+            throw AuthError.serverError("上传失败：\(httpResponse.statusCode)")
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(User.self, from: data)
     }
 }
 
