@@ -264,58 +264,6 @@ struct ProfileDetailView: View {
     }
 }
 
-// 保持 InfoRow 不变
-struct InfoRow: View {
-    let title: String
-    let content: String
-    var isEditable: Bool = false
-    var showBindButton: Bool = false
-    var onEdit: (() -> Void)? = nil
-    
-    var body: some View {
-        HStack(alignment: .top) {
-            Text(title)
-                .foregroundColor(.gray)
-                .frame(width: 60, alignment: .leading)
-            
-            if isEditable {
-                HStack {
-                    Text(content)
-                        .foregroundColor(.primary)
-                        .textSelection(.enabled)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(title == "简介" ? 4 : 1)  // 简介最多显示4行，其他内容1行
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .onTapGesture {
-                            onEdit?()
-                        }
-                    Image(systemName: "pencil")
-                        .foregroundColor(.blue)
-                        .onTapGesture {
-                            onEdit?()
-                        }
-                }
-            } else {
-                HStack {
-                    Text(content)
-                        .foregroundColor(.primary)
-                        .textSelection(.enabled)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(title == "简介" ? 4 : 1)  // 简介最多显示4行，其他内容1行
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if showBindButton {
-                        Button("绑定") {
-                            // TODO: 实现绑定功能
-                        }
-                        .foregroundColor(.blue)
-                    }
-                }
-            }
-        }
-        .padding()
-    }
-}
-
 struct BioEditView: View {
     @Binding var bio: String
     @Environment(\.dismiss) var dismiss
