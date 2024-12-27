@@ -15,7 +15,7 @@ struct SmtxApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
-                .environment(\.userStore, userStore)
+                .environmentObject(userStore)
                 .onAppear {
                     if isFirstLaunch {
                         setupInitialLanguageSections()

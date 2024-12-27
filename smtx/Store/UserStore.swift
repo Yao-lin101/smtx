@@ -13,24 +13,20 @@ class UserStore: ObservableObject {
     @Published private(set) var isLoading = false
     
     private init() {
-        print("UserStore init: checking token")
-        // 检查是否有保存的 token
+        let instanceId = UUID().uuidString.prefix(8)
+        print("UserStore init [\(instanceId)]: checking token")
         if let token = TokenManager.shared.accessToken {
-            print("Found token:", token)
+            print("[\(instanceId)] Found token:", token)
             Task {
                 do {
-                    // 验证 token 并获取用户信息
-                    try await validateToken(token)
-                    print("Token validation successful")
+                    try await validateToken(token, instanceId: instanceId)
                 } catch {
-                    print("Token validation failed:", error)
-                    await MainActor.run {
-                        self.logout()
-                    }
+                    print("[\(instanceId)] Token validation failed:", error)
+                    self.logout()
                 }
             }
         } else {
-            print("No token found")
+            print("[\(instanceId)] No token found")
         }
     }
     
@@ -55,24 +51,6 @@ class UserStore: ObservableObject {
         isAuthenticated = false
     }
     
-    // 检查认证状态
-    func checkAuthState() async {
-        guard let token = TokenManager.shared.accessToken else {
-            logout()
-            return
-        }
-        
-        isLoading = true
-        defer { isLoading = false }
-        
-        do {
-            // 验证 token 并获取用户信息
-            try await validateToken(token)
-        } catch {
-            logout()
-        }
-    }
-    
     // 更新用户信息
     func updateUserInfo(_ user: User) {
         currentUser = user
@@ -89,43 +67,33 @@ class UserStore: ObservableObject {
     }
     
     // 验证 token
-    private func validateToken(_ token: String) async throws {
-        print("Starting token validation")
-        // 调用后端 API 验证 token 并获取用户信息
+    private func validateToken(_ token: String, instanceId: String.SubSequence) async throws {
+        print("[\(instanceId)] Starting token validation")
+        
         let url = URL(string: "\(AuthService.shared.baseURL)/users/profile/")!
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        print("Sending request to:", url)
         let (data, response) = try await URLSession.shared.data(for: request)
-        print("Received response:", response)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("Invalid response type")
             throw AuthError.networkError("无效的响应")
         }
         
-        print("Status code:", httpResponse.statusCode)
-        
         if httpResponse.statusCode == 401 {
-            print("Token expired")
             throw AuthError.serverError("Token 已过期")
         }
         
         if httpResponse.statusCode != 200 {
-            print("Validation failed with status code:", httpResponse.statusCode)
             throw AuthError.serverError("验证失败：\(httpResponse.statusCode)")
         }
         
         let user = try JSONDecoder().decode(User.self, from: data)
-        print("Successfully decoded user:", user)
         
         await MainActor.run {
-            print("Setting user and auth state on main actor")
             self.currentUser = user
             self.isAuthenticated = true
-            print("Current auth state:", self.isAuthenticated)
-            print("Current user:", self.currentUser as Any)
+            print("[\(instanceId)] Token validation completed")
         }
     }
 }
