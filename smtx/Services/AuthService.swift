@@ -165,6 +165,65 @@ class AuthService {
             throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
         }
     }
+    
+    func login(email: String, password: String) async throws -> LoginResponse {
+        let body = LoginRequest(
+            email: email,
+            password: password
+        )
+        
+        let request = makeRequest(
+            "users/login/",
+            method: "POST",
+            body: body
+        )
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AuthError.networkError("无效的响应")
+        }
+        
+        if httpResponse.statusCode == 400 {
+            if let errorResponse = try? JSONDecoder().decode([String: [String]].self, from: data),
+               let firstError = errorResponse.first?.value.first {
+                throw AuthError.serverError(firstError)
+            }
+            
+            // 尝试解析简单的错误消息
+            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
+               let errorMessage = errorResponse["error"] {
+                throw AuthError.serverError(errorMessage)
+            }
+            
+            throw AuthError.serverError("登录失败")
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            return try decoder.decode(LoginResponse.self, from: data)
+        } catch {
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    throw AuthError.serverError("缺少字段：\(key.stringValue)")
+                case .typeMismatch(let type, let context):
+                    throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .valueNotFound(let type, let context):
+                    throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .dataCorrupted(let context):
+                    throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
+                @unknown default:
+                    throw AuthError.serverError("未知解码错误")
+                }
+            }
+            throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
+        }
+    }
 }
 
 // 请求模型
@@ -227,6 +286,25 @@ struct User: Codable {
 }
 
 struct RegisterResponse: Codable {
+    let refresh: String
+    let access: String
+    let user: User
+    
+    enum CodingKeys: String, CodingKey {
+        case refresh
+        case access
+        case user
+    }
+}
+
+// 请求模型
+struct LoginRequest: Codable {
+    let email: String
+    let password: String
+}
+
+// 响应模型
+struct LoginResponse: Codable {
     let refresh: String
     let access: String
     let user: User

@@ -3,7 +3,10 @@ import SwiftUI
 
 @MainActor
 class UserStore: ObservableObject {
-    static let shared = UserStore()
+    static let shared: UserStore = {
+        let store = UserStore()
+        return store
+    }()
     
     @Published private(set) var currentUser: User?
     @Published private(set) var isAuthenticated = false
@@ -53,6 +56,9 @@ class UserStore: ObservableObject {
             // TODO: 调用后端 API 验证 token 并获取用户信息
             // 这里暂时只验证 token 是否存在
             isAuthenticated = true
+            
+            // 添加一个可能抛出错误的 API 调用
+            try await validateToken(token)
         } catch {
             logout()
         }
@@ -70,6 +76,16 @@ class UserStore: ObservableObject {
         }
         
         // TODO: 实现 token 刷新逻辑
+        throw AuthError.networkError("Token refresh not implemented")
+    }
+    
+    // 验证 token
+    private func validateToken(_ token: String) async throws {
+        // TODO: 实现实际的 token 验证逻辑
+        // 这里暂时模拟一个可能失败的验证
+        if token.isEmpty {
+            throw AuthError.networkError("Invalid token")
+        }
     }
 }
 
