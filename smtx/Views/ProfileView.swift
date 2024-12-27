@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @StateObject private var userStore = UserStore.shared
@@ -13,7 +14,8 @@ struct ProfileView: View {
     // 头像相关状态
     @State private var showingImagePicker = false
     @State private var showingImageCropper = false
-    @State private var selectedImage: UIImage?
+    @State private var selectedImage: PhotosPickerItem?
+    @State private var tempUIImage: UIImage?
     @State private var isUploadingAvatar = false
     
     // 邮箱域名选项
@@ -38,9 +40,9 @@ struct ProfileView: View {
                     VStack(spacing: 24) {
                         // 用户头像和基本信息
                         VStack(spacing: 16) {
-                            Button(action: {
-                                showingImagePicker = true
-                            }) {
+                            PhotosPicker(selection: $selectedImage,
+                                       matching: .images,
+                                       photoLibrary: .shared()) {
                                 if let user = userStore.currentUser {
                                     if let avatar = user.avatar, !avatar.isEmpty {
                                         AsyncImage(url: URL(string: avatar)) { image in
@@ -60,6 +62,16 @@ struct ProfileView: View {
                                             .aspectRatio(contentMode: .fit)
                                             .frame(width: 100, height: 100)
                                             .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                            .onChange(of: selectedImage) { newValue in
+                                Task {
+                                    if let data = try? await newValue?.loadTransferable(type: Data.self),
+                                       let uiImage = UIImage(data: data) {
+                                        tempUIImage = uiImage
+                                        showingImageCropper = true
+                                        selectedImage = nil
                                     }
                                 }
                             }
@@ -118,16 +130,8 @@ struct ProfileView: View {
                     }
                 }
                 .background(Color(.systemGroupedBackground))
-                .sheet(isPresented: $showingImagePicker) {
-                    ImagePicker(image: $selectedImage, isPresented: $showingImagePicker)
-                        .onChange(of: selectedImage) { newImage in
-                            if let image = newImage {
-                                showingImageCropper = true
-                            }
-                        }
-                }
                 .sheet(isPresented: $showingImageCropper) {
-                    if let image = selectedImage {
+                    if let image = tempUIImage {
                         ImageCropperView(image: image, aspectRatio: 1) { croppedImage in
                             uploadAvatar(croppedImage)
                         }
