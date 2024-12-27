@@ -127,7 +127,7 @@ struct ProfileView: View {
                             // 隐藏的自动填充阻止器
                             Section {
                                 HStack {
-                                    TextField("", text: $emailPrefix)
+                                    TextField("", text: .constant(""))
                                         .disabled(true)
                                 }
                             }
@@ -143,12 +143,17 @@ struct ProfileView: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             } else {
-                                Text("登录")
+                                HStack {
+                                    Image(systemName: "person.fill")
+                                        .foregroundColor(.white)
+                                    Text("登录")
+                                        .foregroundColor(.white)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
-                        .background(Color.blue)
+                        .background(emailPrefix.isEmpty || password.isEmpty || isLoggingIn ? Color.blue.opacity(0.5) : Color.blue)
                         .foregroundColor(.white)
                         .cornerRadius(8)
                         .disabled(emailPrefix.isEmpty || password.isEmpty || isLoggingIn)
@@ -163,13 +168,17 @@ struct ProfileView: View {
                         Button(action: {
                             showingEmailRegister = true
                         }) {
-                            Text("邮箱注册")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(Color.blue)
-                                .cornerRadius(10)
+                            HStack {
+                                Image(systemName: "envelope.fill")
+                                    .foregroundColor(.white)
+                                Text("邮箱注册")
+                                    .foregroundColor(.white)
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.blue)
+                            .cornerRadius(10)
                         }
                         
                         Button(action: {

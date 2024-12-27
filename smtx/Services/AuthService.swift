@@ -173,7 +173,7 @@ class AuthService {
         )
         
         let request = makeRequest(
-            "users/login/",
+            "users/token/",
             method: "POST",
             body: body
         )
@@ -193,6 +193,9 @@ class AuthService {
             // 尝试解析简单的错误消息
             if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
                let errorMessage = errorResponse["error"] {
+                if errorMessage.contains("密码错误") {
+                    throw AuthError.invalidPassword
+                }
                 throw AuthError.serverError(errorMessage)
             }
             
@@ -263,7 +266,7 @@ struct User: Codable {
         email = try container.decode(String.self, forKey: .email)
         avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
         
-        // 处理布尔值，支持数字和布尔类型
+        // 处理布尔值，持数字和布尔类型
         if let boolValue = try? container.decode(Bool.self, forKey: .isEmailVerified) {
             isEmailVerified = boolValue
         } else if let intValue = try? container.decode(Int.self, forKey: .isEmailVerified) {
