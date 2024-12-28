@@ -3,7 +3,7 @@ import SwiftUI
 struct CloudTemplatesView: View {
     @EnvironmentObject private var router: NavigationRouter
     @StateObject private var viewModel = CloudTemplateViewModel()
-    @State private var selectedLanguage: LanguageSection?
+    @AppStorage("selectedLanguageSection") private var selectedLanguageUid: String = ""
     @State private var showingLanguageSelector = false
     @State private var showingSubscribeSheet = false
     @AppStorage("cloudTemplateDisplayMode") private var displayMode: TemplateListDisplayMode = .list
@@ -12,6 +12,10 @@ struct CloudTemplatesView: View {
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)
     ]
+    
+    private var selectedLanguage: LanguageSection? {
+        viewModel.languageSections.first { $0.uid == selectedLanguageUid }
+    }
     
     private var filteredTemplates: [CloudTemplate] {
         if searchText.isEmpty {
@@ -33,15 +37,27 @@ struct CloudTemplatesView: View {
                 HStack {
                     // 语言选择器
                     Menu {
-                        ForEach(viewModel.languageSections) { section in
-                            Button(section.name) {
-                                selectedLanguage = section
-                                viewModel.loadTemplates(languageSection: section.name)
+                        if viewModel.subscribedSections.isEmpty {
+                            Text("无")
+                        } else {
+                            Button("全部") {
+                                selectedLanguageUid = ""
+                                Task {
+                                    await viewModel.loadTemplates()
+                                }
+                            }
+                            ForEach(viewModel.subscribedSections) { section in
+                                Button(section.name) {
+                                    selectedLanguageUid = section.uid
+                                    Task {
+                                        await viewModel.loadTemplates(languageSection: section.name)
+                                    }
+                                }
                             }
                         }
                     } label: {
                         HStack {
-                            Text(selectedLanguage?.name ?? "选择语言")
+                            Text(selectedLanguage?.name ?? "全部")
                                 .font(.headline)
                             Image(systemName: "chevron.down")
                         }
@@ -128,10 +144,22 @@ struct CloudTemplatesView: View {
             Text(viewModel.errorMessage ?? "未知错误")
         }
         .sheet(isPresented: $showingSubscribeSheet) {
-            SubscribeLanguageView()
+            SubscribeLanguageView(viewModel: viewModel)
         }
         .onAppear {
-            viewModel.loadLanguageSections()
+            Task {
+                await viewModel.loadInitialData(selectedLanguageUid: selectedLanguageUid)
+            }
+        }
+        // 监听订阅状态变化
+        .onChange(of: viewModel.subscribedSections) { sections in
+            if !selectedLanguageUid.isEmpty && !sections.contains(where: { $0.uid == selectedLanguageUid }) {
+                // 如果当前选中的分区被取消订阅，清除选择
+                selectedLanguageUid = ""
+                Task {
+                    await viewModel.loadTemplates()
+                }
+            }
         }
     }
     
@@ -146,7 +174,9 @@ struct CloudTemplatesView: View {
         .listStyle(.plain)
         .refreshable {
             if let section = selectedLanguage {
-                viewModel.loadTemplates(languageSection: section.name)
+                Task {
+                    await viewModel.loadTemplates(languageSection: section.name)
+                }
             }
         }
     }
@@ -164,7 +194,9 @@ struct CloudTemplatesView: View {
         }
         .refreshable {
             if let section = selectedLanguage {
-                viewModel.loadTemplates(languageSection: section.name)
+                Task {
+                    await viewModel.loadTemplates(languageSection: section.name)
+                }
             }
         }
     }
@@ -287,14 +319,23 @@ struct CloudTemplateCard: View {
 
 struct SubscribeLanguageView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel = CloudTemplateViewModel()
+    @ObservedObject var viewModel: CloudTemplateViewModel
     @State private var searchText = ""
     
-    var filteredSections: [LanguageSection] {
+    var filteredSubscribedSections: [LanguageSection] {
         if searchText.isEmpty {
-            return viewModel.languageSections
+            return viewModel.subscribedSections
         }
-        return viewModel.languageSections.filter {
+        return viewModel.subscribedSections.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    var filteredUnsubscribedSections: [LanguageSection] {
+        if searchText.isEmpty {
+            return viewModel.unsubscribedSections
+        }
+        return viewModel.unsubscribedSections.filter {
             $0.name.localizedCaseInsensitiveContains(searchText)
         }
     }
@@ -302,12 +343,19 @@ struct SubscribeLanguageView: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(filteredSections) { section in
-                    HStack {
-                        Text(section.name)
-                        Spacer()
-                        Text("\(section.templatesCount) 个模板")
-                            .foregroundColor(.secondary)
+                if !filteredSubscribedSections.isEmpty {
+                    Section("已订阅") {
+                        ForEach(filteredSubscribedSections) { section in
+                            LanguageSectionRow(section: section, viewModel: viewModel)
+                        }
+                    }
+                }
+                
+                if !filteredUnsubscribedSections.isEmpty {
+                    Section("未订阅") {
+                        ForEach(filteredUnsubscribedSections) { section in
+                            LanguageSectionRow(section: section, viewModel: viewModel)
+                        }
                     }
                 }
             }
@@ -323,7 +371,36 @@ struct SubscribeLanguageView: View {
             }
         }
         .onAppear {
-            viewModel.loadLanguageSections()
+            Task {
+                await viewModel.loadLanguageSections()
+            }
         }
+    }
+}
+
+struct LanguageSectionRow: View {
+    let section: LanguageSection
+    @ObservedObject var viewModel: CloudTemplateViewModel
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(section.name)
+                Text("\(section.templatesCount) 个模板")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Button {
+                viewModel.toggleSubscription(for: section)
+            } label: {
+                Image(systemName: section.isSubscribed ? "checkmark.circle.fill" : "plus.circle")
+                    .foregroundColor(section.isSubscribed ? .green : .accentColor)
+                    .imageScale(.large)
+            }
+        }
+        .contentShape(Rectangle())
     }
 } 

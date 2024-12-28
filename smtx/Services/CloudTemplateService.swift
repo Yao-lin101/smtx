@@ -189,6 +189,50 @@ class CloudTemplateService {
         }
     }
     
+    // MARK: - Language Section Subscription
+    
+    func subscribeLanguageSection(uid: String) async throws -> Bool {
+        guard let url = URL(string: "\(baseURL)/language-sections/\(uid)/subscribe/") else {
+            throw CloudTemplateError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // 添加认证token
+        if let token = tokenManager.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw CloudTemplateError.invalidResponse
+            }
+            
+            switch httpResponse.statusCode {
+            case 200:
+                let decoder = JSONDecoder()
+                let result = try decoder.decode([String: String].self, from: data)
+                return result["status"] == "subscribed"
+            case 401:
+                throw CloudTemplateError.unauthorized
+            case 400...499:
+                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
+            case 500...599:
+                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            default:
+                throw CloudTemplateError.unknown
+            }
+        } catch let error as CloudTemplateError {
+            throw error
+        } catch {
+            throw CloudTemplateError.networkError(error)
+        }
+    }
+    
     // MARK: - Cloud Templates
     
     func fetchTemplate(uid: String) async throws -> CloudTemplate {
@@ -387,14 +431,19 @@ struct PaginatedResponse<T: Codable>: Codable {
     let results: [T]
 }
 
-struct LanguageSection: Codable, Identifiable {
+struct LanguageSection: Codable, Identifiable, Equatable {
     let uid: String
     let name: String
     let templatesCount: Int
     let createdAt: Date
     let updatedAt: Date
+    var isSubscribed: Bool
     
     var id: String { uid }
+    
+    static func == (lhs: LanguageSection, rhs: LanguageSection) -> Bool {
+        lhs.uid == rhs.uid
+    }
 }
 
 struct CloudTemplate: Codable, Identifiable {

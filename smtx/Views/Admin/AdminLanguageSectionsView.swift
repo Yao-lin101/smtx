@@ -60,9 +60,11 @@ struct AdminLanguageSectionsView: View {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("创建") {
                             if !newSectionName.isEmpty {
-                                viewModel.createLanguageSection(name: newSectionName)
-                                newSectionName = ""
-                                showingCreateSheet = false
+                                Task {
+                                    await viewModel.createLanguageSection(name: newSectionName)
+                                    newSectionName = ""
+                                    showingCreateSheet = false
+                                }
                             }
                         }
                         .disabled(newSectionName.isEmpty)
@@ -75,7 +77,10 @@ struct AdminLanguageSectionsView: View {
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) {
                 if let section = sectionToDelete {
-                    viewModel.deleteLanguageSection(uid: section.uid)
+                    Task {
+                        await viewModel.deleteLanguageSection(uid: section.uid)
+                    }
+                    showingDeleteAlert = false
                 }
             }
         } message: {
@@ -84,7 +89,9 @@ struct AdminLanguageSectionsView: View {
             }
         }
         .onAppear {
-            viewModel.loadLanguageSections()
+            Task {
+                await viewModel.loadLanguageSections()
+            }
         }
         .overlay {
             if viewModel.isLoading {

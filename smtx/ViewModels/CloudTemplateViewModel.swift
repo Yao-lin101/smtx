@@ -14,31 +14,106 @@ class CloudTemplateViewModel: ObservableObject {
     
     // MARK: - Language Section Management
     
-    func loadLanguageSections() {
+    func loadLanguageSections() async {
+        print("🔄 Start loading language sections")
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            languageSections = try await service.fetchLanguageSections()
+            print("✅ Loaded \(languageSections.count) language sections")
+        } catch CloudTemplateError.unauthorized {
+            print("❌ Unauthorized error")
+            errorMessage = "请先登录"
+            showError = true
+        } catch CloudTemplateError.serverError(let message) {
+            print("❌ Server error: \(message)")
+            errorMessage = message
+            showError = true
+        } catch {
+            print("❌ Loading error: \(error)")
+            errorMessage = "加载语言分区失败"
+            showError = true
+        }
+        
+        isLoading = false
+        print("🏁 Finished loading language sections")
+    }
+    
+    var subscribedSections: [LanguageSection] {
+        languageSections.filter { $0.isSubscribed }
+    }
+    
+    var unsubscribedSections: [LanguageSection] {
+        languageSections.filter { !$0.isSubscribed }
+    }
+    
+    func loadInitialData(selectedLanguageUid: String) async {
+        // 1. 先加载语言分区
+        await loadLanguageSections()
+        
+        // 2. 根据选中的分区加载模板
+        if !selectedLanguageUid.isEmpty {
+            if let section = languageSections.first(where: { $0.uid == selectedLanguageUid }) {
+                // 如果找到了保存的分区，加载该分区的模板
+                await loadTemplates(languageSection: section.name)
+            } else {
+                // 如果找不到保存的分区，加载所有模板
+                await loadTemplates()
+            }
+        } else {
+            // 如果没有选中的分区，加载所有模板
+            await loadTemplates()
+        }
+    }
+    
+    func loadTemplates(languageSection: String? = nil) async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            templates = try await service.fetchTemplates(
+                languageSection: languageSection
+            )
+        } catch CloudTemplateError.unauthorized {
+            errorMessage = "请先登录"
+            showError = true
+        } catch CloudTemplateError.serverError(let message) {
+            errorMessage = message
+            showError = true
+        } catch {
+            errorMessage = "加载模板失败"
+            showError = true
+        }
+        
+        isLoading = false
+    }
+    
+    func toggleSubscription(for section: LanguageSection) {
         Task {
-            print("🔄 Start loading language sections")
             isLoading = true
             errorMessage = nil
             
             do {
-                languageSections = try await service.fetchLanguageSections()
-                print("✅ Loaded \(languageSections.count) language sections")
+                let isSubscribed = try await service.subscribeLanguageSection(uid: section.uid)
+                // 更新本地数据
+                if let index = languageSections.firstIndex(where: { $0.uid == section.uid }) {
+                    var updatedSection = section
+                    updatedSection.isSubscribed = isSubscribed
+                    languageSections[index] = updatedSection
+                }
             } catch CloudTemplateError.unauthorized {
-                print("❌ Unauthorized error")
                 errorMessage = "请先登录"
                 showError = true
             } catch CloudTemplateError.serverError(let message) {
-                print("❌ Server error: \(message)")
                 errorMessage = message
                 showError = true
             } catch {
-                print("❌ Loading error: \(error)")
-                errorMessage = "加载语言分区失败"
+                errorMessage = "操作失败"
                 showError = true
             }
             
             isLoading = false
-            print("🏁 Finished loading language sections")
         }
     }
     
@@ -50,7 +125,7 @@ class CloudTemplateViewModel: ObservableObject {
             do {
                 let newSection = try await service.createLanguageSection(name: name)
                 languageSections.append(newSection)
-                // 按名称重新排序
+                // 按名称重新���序
                 languageSections.sort { $0.name < $1.name }
             } catch CloudTemplateError.unauthorized {
                 errorMessage = "请先登录"
@@ -100,32 +175,6 @@ class CloudTemplateViewModel: ObservableObject {
             do {
                 let template = try await service.fetchTemplate(uid: uid)
                 templates = [template]
-            } catch CloudTemplateError.unauthorized {
-                errorMessage = "请先登录"
-                showError = true
-            } catch CloudTemplateError.serverError(let message) {
-                errorMessage = message
-                showError = true
-            } catch {
-                errorMessage = "加载模板失败"
-                showError = true
-            }
-            
-            isLoading = false
-        }
-    }
-    
-    func loadTemplates(languageSection: String? = nil, tag: String? = nil, authorUid: String? = nil) {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                templates = try await service.fetchTemplates(
-                    languageSection: languageSection,
-                    tag: tag,
-                    authorUid: authorUid
-                )
             } catch CloudTemplateError.unauthorized {
                 errorMessage = "请先登录"
                 showError = true
