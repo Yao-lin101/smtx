@@ -4,6 +4,8 @@ struct SubscribeLanguageView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: CloudTemplateViewModel
     @Binding var searchText: String
+    @State private var sectionToUnsubscribe: LanguageSection?
+    @State private var showingUnsubscribeAlert = false
     
     private var filteredSubscribedSections: [LanguageSection] {
         let sections = viewModel.languageSections.filter { $0.isSubscribed }
@@ -36,8 +38,13 @@ struct SubscribeLanguageView: View {
             Spacer()
             
             Button {
-                Task {
-                    await viewModel.toggleSubscription(for: section)
+                if section.isSubscribed {
+                    sectionToUnsubscribe = section
+                    showingUnsubscribeAlert = true
+                } else {
+                    Task {
+                        await viewModel.toggleSubscription(for: section)
+                    }
                 }
             } label: {
                 Image(systemName: section.isSubscribed ? "checkmark.circle.fill" : "plus.circle")
@@ -78,6 +85,20 @@ struct SubscribeLanguageView: View {
             }
             .task {
                 await viewModel.loadLanguageSections()
+            }
+            .alert("确认取消订阅", isPresented: $showingUnsubscribeAlert) {
+                Button("取消", role: .cancel) { }
+                Button("确定", role: .destructive) {
+                    if let section = sectionToUnsubscribe {
+                        Task {
+                            await viewModel.toggleSubscription(for: section)
+                        }
+                    }
+                }
+            } message: {
+                if let section = sectionToUnsubscribe {
+                    Text("确定要取消订阅「\(section.name)」吗？")
+                }
             }
         }
     }
