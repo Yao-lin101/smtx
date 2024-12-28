@@ -77,7 +77,6 @@ struct UserInfoSection: View {
 // 3. 主视图
 struct ProfileDetailView: View {
     @EnvironmentObject var userStore: UserStore
-    @Environment(\.dismiss) var dismiss
     @State private var showingImagePicker = false
     @State private var showingImageCropper = false
     @State private var selectedImage: PhotosPickerItem?
@@ -96,85 +95,79 @@ struct ProfileDetailView: View {
     private let usernameMaxLength = 20  // 添加用户名最大长度常量
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    if let user = userStore.currentUser {
-                        AvatarSection(
-                            avatar: user.avatar,
-                            onImageSelect: { showingImagePicker = true }
-                        )
-                        
-                        UserInfoSection(
-                            user: user,
-                            onEditUsername: { startEditingUsername() },
-                            onEditBio: { startEditingBio() }
-                        )
-                    }
+        ScrollView {
+            VStack(spacing: 20) {
+                if let user = userStore.currentUser {
+                    AvatarSection(
+                        avatar: user.avatar,
+                        onImageSelect: { showingImagePicker = true }
+                    )
+                    
+                    UserInfoSection(
+                        user: user,
+                        onEditUsername: { startEditingUsername() },
+                        onEditBio: { startEditingBio() }
+                    )
                 }
             }
-            .navigationTitle("个人资料")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("返回") { dismiss() }
-                }
-            }
-            .photosPicker(isPresented: $showingImagePicker,
-                         selection: $selectedImage,
-                         matching: .images,
-                         photoLibrary: .shared())
-            .onChange(of: selectedImage) { newValue in
-                handleImageSelected(newValue)
-            }
-            .sheet(isPresented: $showingImageCropper) {
-                if let image = tempUIImage {
-                    ImageCropperView(image: image, aspectRatio: 1) { croppedImage in
-                        uploadAvatar(croppedImage)
-                    }
-                }
-            }
-            .alert("修改昵称", isPresented: $editingUsername) {
-                TextField("请输入新昵称", text: Binding(
-                    get: { newUsername },
-                    set: { newValue in
-                        if newValue.count <= usernameMaxLength {
-                            newUsername = newValue
+        }
+        .navigationTitle("个人资料")
+        .navigationBarTitleDisplayMode(.inline)
+        .photosPicker(isPresented: $showingImagePicker,
+                     selection: $selectedImage,
+                     matching: .images,
+                     photoLibrary: .shared())
+        .onChange(of: selectedImage) { newValue in
+            if let item = newValue {
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            tempUIImage = uiImage
+                            showingImageCropper = true
+                            selectedImage = nil  // 重置选择器状态
                         }
                     }
-                ))
-                Button("取消", role: .cancel) { }
-                Button("确定") { updateUsername(newUsername) }
-            } message: {
-                Text("1-20个字符")  // 修改提示信息
-            }
-            .sheet(isPresented: $showingBioEditor) {
-                BioEditView(bio: $newBio) { updatedBio in
-                    updateBio(updatedBio)
                 }
             }
-            .alert("提示", isPresented: $showingAlert) {
-                Button("确定", role: .cancel) { }
-            } message: {
-                Text(alertMessage)
-            }
-            .toast(isPresented: $showingToast, message: alertMessage, type: toastType)
         }
+        .sheet(isPresented: $showingImageCropper) {
+            if let image = tempUIImage {
+                ImageCropperView(image: image, aspectRatio: 1) { croppedImage in
+                    uploadAvatar(croppedImage)
+                    showingImageCropper = false  // 确保裁剪完成后关闭
+                    tempUIImage = nil  // 清理临时图片
+                }
+            }
+        }
+        .alert("修改昵称", isPresented: $editingUsername) {
+            TextField("请输入新昵称", text: Binding(
+                get: { newUsername },
+                set: { newValue in
+                    if newValue.count <= usernameMaxLength {
+                        newUsername = newValue
+                    }
+                }
+            ))
+            Button("取消", role: .cancel) { }
+            Button("确定") { updateUsername(newUsername) }
+        } message: {
+            Text("1-20个字符")  // 修改提示信息
+        }
+        .sheet(isPresented: $showingBioEditor) {
+            BioEditView(bio: $newBio) { updatedBio in
+                updateBio(updatedBio)
+            }
+        }
+        .alert("提示", isPresented: $showingAlert) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(alertMessage)
+        }
+        .toast(isPresented: $showingToast, message: alertMessage, type: toastType)
     }
     
     // MARK: - Private Methods
-    private func handleImageSelected(_ item: PhotosPickerItem?) {
-        Task {
-            if let data = try? await item?.loadTransferable(type: Data.self),
-               let uiImage = UIImage(data: data) {
-                await MainActor.run {
-                    tempUIImage = uiImage
-                    showingImageCropper = true
-                }
-            }
-        }
-    }
-    
     private func startEditingUsername() {
         newUsername = userStore.currentUser?.username ?? ""
         editingUsername = true
