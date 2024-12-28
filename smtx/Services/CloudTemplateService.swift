@@ -104,7 +104,7 @@ class CloudTemplateService {
         }
     }
     
-    func createLanguageSection(name: String) async throws -> LanguageSection {
+    func createLanguageSection(name: String, chineseName: String = "") async throws -> LanguageSection {
         guard let url = URL(string: "\(baseURL)/language-sections/") else {
             throw CloudTemplateError.invalidURL
         }
@@ -119,7 +119,10 @@ class CloudTemplateService {
         }
         
         // 准备请求体
-        let body = ["name": name]
+        let body = [
+            "name": name,
+            "chinese_name": chineseName
+        ]
         request.httpBody = try JSONEncoder().encode(body)
         
         do {
@@ -133,6 +136,24 @@ class CloudTemplateService {
             case 201:
                 let decoder = JSONDecoder()
                 decoder.keyDecodingStrategy = .convertFromSnakeCase
+                
+                // 配置日期解码器以处理带时区的ISO8601格式
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                decoder.dateDecodingStrategy = .custom { decoder in
+                    let container = try decoder.singleValueContainer()
+                    let dateString = try container.decode(String.self)
+                    
+                    if let date = formatter.date(from: dateString) {
+                        return date
+                    }
+                    
+                    throw DecodingError.dataCorruptedError(
+                        in: container,
+                        debugDescription: "Invalid date format"
+                    )
+                }
+                
                 return try decoder.decode(LanguageSection.self, from: data)
             case 401:
                 throw CloudTemplateError.unauthorized
@@ -303,7 +324,7 @@ class CloudTemplateService {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // 添加认证token
+        // 添��认证token
         if let token = tokenManager.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -434,15 +455,22 @@ struct PaginatedResponse<T: Codable>: Codable {
 struct LanguageSection: Codable, Identifiable, Equatable {
     let uid: String
     let name: String
+    let chineseName: String
     let templatesCount: Int
+    var isSubscribed: Bool
     let createdAt: Date
     let updatedAt: Date
-    var isSubscribed: Bool
     
     var id: String { uid }
     
     static func == (lhs: LanguageSection, rhs: LanguageSection) -> Bool {
-        lhs.uid == rhs.uid
+        lhs.uid == rhs.uid &&
+        lhs.name == rhs.name &&
+        lhs.chineseName == rhs.chineseName &&
+        lhs.templatesCount == rhs.templatesCount &&
+        lhs.isSubscribed == rhs.isSubscribed &&
+        lhs.createdAt == rhs.createdAt &&
+        lhs.updatedAt == rhs.updatedAt
     }
 }
 

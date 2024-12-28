@@ -162,54 +162,6 @@ class CloudTemplateViewModel: ObservableObject {
         }
     }
     
-    func createLanguageSection(name: String) {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                let newSection = try await service.createLanguageSection(name: name)
-                languageSections.append(newSection)
-                // 按名称重新排序
-                languageSections.sort { $0.name < $1.name }
-            } catch CloudTemplateError.unauthorized {
-                errorMessage = "请先登录"
-                showError = true
-            } catch CloudTemplateError.serverError(let message) {
-                errorMessage = message
-                showError = true
-            } catch {
-                errorMessage = "创建语言分区失败"
-                showError = true
-            }
-            
-            isLoading = false
-        }
-    }
-    
-    func deleteLanguageSection(uid: String) {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                try await service.deleteLanguageSection(uid: uid)
-                languageSections.removeAll { $0.uid == uid }
-            } catch CloudTemplateError.unauthorized {
-                errorMessage = "请先登录"
-                showError = true
-            } catch CloudTemplateError.serverError(let message) {
-                errorMessage = message
-                showError = true
-            } catch {
-                errorMessage = "删除语言分区失败"
-                showError = true
-            }
-            
-            isLoading = false
-        }
-    }
-    
     // MARK: - Template Management
     
     func loadTemplate(_ uid: String) {
