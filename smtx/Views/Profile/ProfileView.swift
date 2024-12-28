@@ -40,16 +40,25 @@ struct ProfileView: View {
                                     Button {
                                         showingAvatarPreview = true
                                     } label: {
-                                        AsyncImage(url: URL(string: avatar)) { image in
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: 100, height: 100)
-                                                .clipShape(Circle())
-                                                .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
-                                        } placeholder: {
-                                            ProgressView()
-                                                .frame(width: 100, height: 100)
+                                        CachedAsyncImage(url: URL(string: avatar)) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 100, height: 100)
+                                                    .clipShape(Circle())
+                                                    .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                                            case .empty, .failure:
+                                                Image(systemName: "person.circle.fill")
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fit)
+                                                    .frame(width: 100, height: 100)
+                                                    .foregroundColor(.blue)
+                                            @unknown default:
+                                                ProgressView()
+                                                    .frame(width: 100, height: 100)
+                                            }
                                         }
                                     }
                                     .sheet(isPresented: $showingAvatarPreview) {

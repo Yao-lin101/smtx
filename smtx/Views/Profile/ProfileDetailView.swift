@@ -10,15 +10,24 @@ struct AvatarSection: View {
         VStack {
             Button(action: onImageSelect) {
                 if let avatar = avatar, !avatar.isEmpty {
-                    AsyncImage(url: URL(string: avatar)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        ProgressView()
+                    CachedAsyncImage(url: URL(string: avatar)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 100, height: 100)
+                                .clipShape(Circle())
+                        case .empty, .failure:
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 100, height: 100)
+                                .foregroundColor(.blue)
+                        @unknown default:
+                            ProgressView()
+                        }
                     }
-                    .frame(width: 100, height: 100)
-                    .clipShape(Circle())
                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
                 } else {
                     Image(systemName: "person.circle.fill")
@@ -182,6 +191,22 @@ struct ProfileDetailView: View {
                 isUploadingAvatar = true
                 let updatedUser = try await AuthService.shared.uploadAvatar(image)
                 await MainActor.run {
+                    // 更新用户信息和缓存
+                    if let avatar = updatedUser.avatar,
+                       let url = URL(string: avatar) {
+                        // 预缓存新头像
+                        let request = URLRequest(url: url)
+                        URLSession.shared.dataTask(with: request) { data, response, error in
+                            if let data = data, let response = response {
+                                let cachedResponse = CachedURLResponse(
+                                    response: response,
+                                    data: data,
+                                    storagePolicy: .allowed
+                                )
+                                URLCache.shared.storeCachedResponse(cachedResponse, for: request)
+                            }
+                        }.resume()
+                    }
                     userStore.updateUserInfo(updatedUser)
                     isUploadingAvatar = false
                 }

@@ -13,63 +13,73 @@ class UserStore: ObservableObject {
     @Published private(set) var isLoading = false
     
     private init() {
-        let instanceId = UUID().uuidString.prefix(8)
-        print("UserStore init [\(instanceId)]: checking token")
+        // 尝试从本地加载用户信息
         if let token = TokenManager.shared.accessToken {
-            print("[\(instanceId)] Found token:", token)
+            if let savedUser = loadUserFromUserDefaults() {
+                // 如果有本地缓存的用户信息，先使用它
+                self.currentUser = savedUser
+                self.isAuthenticated = true
+            }
+            
+            // 然后在后台验证 token 并更新用户信息
             Task {
                 do {
-                    try await validateToken(token, instanceId: instanceId)
+                    try await validateToken(token)
                 } catch {
-                    print("[\(instanceId)] Token validation failed:", error)
                     self.logout()
                 }
             }
-        } else {
-            print("[\(instanceId)] No token found")
         }
     }
     
-    // 处理注册成功
-    func handleRegisterSuccess(user: User, accessToken: String, refreshToken: String) {
-        TokenManager.shared.saveTokens(access: accessToken, refresh: refreshToken)
-        isAuthenticated = true
-        currentUser = user
+    // 保存用户信息到 UserDefaults
+    private func saveUserToUserDefaults(_ user: User) {
+        if let encoded = try? JSONEncoder().encode(user) {
+            UserDefaults.standard.set(encoded, forKey: "currentUser")
+        }
     }
     
-    // 处理登录成功
-    func handleLoginSuccess(user: User, accessToken: String, refreshToken: String) {
-        TokenManager.shared.saveTokens(access: accessToken, refresh: refreshToken)
-        isAuthenticated = true
-        currentUser = user
+    // 从 UserDefaults 加载用户信息
+    private func loadUserFromUserDefaults() -> User? {
+        if let data = UserDefaults.standard.data(forKey: "currentUser"),
+           let user = try? JSONDecoder().decode(User.self, from: data) {
+            return user
+        }
+        return nil
     }
     
-    // 登出
+    // 更新用户信息时同时更新本地缓存
+    func updateUserInfo(_ user: User) {
+        currentUser = user
+        saveUserToUserDefaults(user)
+    }
+    
+    // 登出时清除本地缓存
     func logout() {
         TokenManager.shared.clearTokens()
+        UserDefaults.standard.removeObject(forKey: "currentUser")
         currentUser = nil
         isAuthenticated = false
     }
     
-    // 更新用户信息
-    func updateUserInfo(_ user: User) {
+    // 处理登录成功时保存用户信息
+    func handleLoginSuccess(user: User, accessToken: String, refreshToken: String) {
+        TokenManager.shared.saveTokens(access: accessToken, refresh: refreshToken)
+        isAuthenticated = true
         currentUser = user
+        saveUserToUserDefaults(user)
     }
     
-    // 刷新 token
-    func refreshTokenIfNeeded() async throws {
-        guard let refreshToken = TokenManager.shared.refreshToken else {
-            throw AuthError.networkError("No refresh token")
-        }
-        
-        // TODO: 实现 token 刷新逻辑
-        throw AuthError.networkError("Token refresh not implemented")
+    // 处理注册成功时保存用户信息
+    func handleRegisterSuccess(user: User, accessToken: String, refreshToken: String) {
+        TokenManager.shared.saveTokens(access: accessToken, refresh: refreshToken)
+        isAuthenticated = true
+        currentUser = user
+        saveUserToUserDefaults(user)
     }
     
-    // 验证 token
-    private func validateToken(_ token: String, instanceId: String.SubSequence) async throws {
-        print("[\(instanceId)] Starting token validation")
-        
+    // 验证 token - 只在应用启动时调用
+    private func validateToken(_ token: String) async throws {
         let url = URL(string: "\(AuthService.shared.baseURL)/users/profile/")!
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -90,11 +100,8 @@ class UserStore: ObservableObject {
         
         let user = try JSONDecoder().decode(User.self, from: data)
         
-        await MainActor.run {
-            self.currentUser = user
-            self.isAuthenticated = true
-            print("[\(instanceId)] Token validation completed")
-        }
+        self.currentUser = user
+        self.isAuthenticated = true
     }
 }
 
