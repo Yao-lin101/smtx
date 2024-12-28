@@ -101,30 +101,47 @@ smtx/
   - Record: 录音记录
 
 #### 导航系统
-- `NavigationRouter`: 统一管理应用内导航
-  - 模板相关路由
-    - 语言分区列表 (.languageSection)
-    - 模板详情 (.templateDetail)
-    - 创建/编辑模板 (.createTemplate)
-    - 录音页面 (.recording)
-  - 个人中心路由
-    - 个人资料 (.profileDetail)
-    - 设置 (.settings)
-    - 帮助与反馈 (.help)
-    - 关于 (.about)
-    - 头像预览 (.avatarPreview)
+
+- 路由管理
+  - `Route`: 定义所有可能的导航路径
+    - 模板相关: languageSection, templateDetail, createTemplate, recording
+    - 个人中心: profile, profileDetail, settings, help, about, avatarPreview, emailRegister
+
+- 导航路由器
+  - `NavigationRouter`: 为每个主要页面提供独立的导航状态管理
+    - `cloudRouter`: 云模板页面的导航
+    - `localRouter`: 本地模板页面的导航
+    - `profileRouter`: 个人中心页面的导航
 
 - 导航方式
   - `TabView`: 顶层页面切换（云模板、本地模板、个人中心）
-  - `NavigationStack`: 页面层级导航，由 NavigationRouter 统一管理
+  - `NavigationStack`: 页面层级导航，每个主要页面独立管理
   - `.sheet`: 模态视图（如登录、注册、图片裁剪等临时性操作）
 
 - 导航特点
-  - 统一的路由管理
-  - 支持深层导航
-  - 状态持久化
-  - 类型安全的路由定义
-  - 支持导航回退
+  - 独立的导航状态：每个主要页面有自己的导航堆栈
+  - 类型安全：使用枚举定义所有可能的路由
+  - 状态持久化：保持页面导航状态
+  - 深层导航：支持多级页面导航
+  - 模态展示：支持临时性操作的模态展示
+
+- 使用示例
+  ```swift
+  // 定义路由
+  case createTemplate(String, String?)
+  
+  // 导航到新页面
+  router.navigate(to: .createTemplate(language, templateId))
+  
+  // 处理导航
+  .navigationDestination(for: Route.self) { route in
+      switch route {
+      case .createTemplate(let language, let templateId):
+          CreateTemplateView(language: language, existingTemplateId: templateId)
+      // ...
+      }
+  }
+  ```
 
 ## 开发计划
 
