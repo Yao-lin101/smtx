@@ -147,9 +147,8 @@ struct CloudTemplatesView: View {
             SubscribeLanguageView(viewModel: viewModel)
         }
         .onAppear {
-            Task {
-                await viewModel.loadInitialData(selectedLanguageUid: selectedLanguageUid)
-            }
+            // 只加载本地数据
+            viewModel.loadLocalData()
         }
         // 监听订阅状态变化
         .onChange(of: viewModel.subscribedSections) { sections in

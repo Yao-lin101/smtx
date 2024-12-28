@@ -79,6 +79,13 @@ class CloudTemplateViewModel: ObservableObject {
         return []
     }
     
+    // MARK: - Initial Loading
+    
+    func loadLocalData() {
+        // 从本地加载订阅数据
+        languageSections = loadLocalSubscribedSections()
+    }
+    
     func loadInitialData(selectedLanguageUid: String) async {
         // 1. 先从本地加载订阅数据
         let localSubscribedSections = loadLocalSubscribedSections()
