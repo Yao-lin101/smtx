@@ -17,17 +17,35 @@ struct CloudTemplatesView: View {
         viewModel.languageSections.first { $0.uid == selectedLanguageUid }
     }
     
+    private func templateMatches(_ template: CloudTemplate, searchText: String) -> Bool {
+        if template.title.localizedCaseInsensitiveContains(searchText) {
+            return true
+        }
+        return template.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
+    }
+    
     private var filteredTemplates: [CloudTemplate] {
         if searchText.isEmpty {
             return viewModel.templates
         }
-        
-        return viewModel.templates.filter { template in
-            template.title.localizedCaseInsensitiveContains(searchText) ||
-            template.tags.contains { tag in
-                tag.localizedCaseInsensitiveContains(searchText)
-            }
+        return viewModel.templates.filter { templateMatches($0, searchText: searchText) }
+    }
+    
+    private func sectionMatches(_ section: LanguageSection, searchText: String) -> Bool {
+        if section.name.localizedCaseInsensitiveContains(searchText) {
+            return true
         }
+        if !section.chineseName.isEmpty && section.chineseName.localizedCaseInsensitiveContains(searchText) {
+            return true
+        }
+        return false
+    }
+    
+    private var filteredSections: [LanguageSection] {
+        if searchText.isEmpty {
+            return viewModel.languageSections
+        }
+        return viewModel.languageSections.filter { sectionMatches($0, searchText: searchText) }
     }
     
     var body: some View {
@@ -107,7 +125,7 @@ struct CloudTemplatesView: View {
                 .padding(.horizontal)
                 .padding(.bottom)
                 
-                // 模板列表/网格视图
+                // 模板/网格视图
                 if viewModel.isLoading {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -144,7 +162,7 @@ struct CloudTemplatesView: View {
             Text(viewModel.errorMessage ?? "未知错误")
         }
         .sheet(isPresented: $showingSubscribeSheet) {
-            SubscribeLanguageView(viewModel: viewModel)
+            SubscribeLanguageView(viewModel: viewModel, searchText: $searchText)
         }
         .onAppear {
             // 只加载本地数据
@@ -312,75 +330,35 @@ struct CloudTemplateCard: View {
     }
 }
 
-struct SubscribeLanguageView: View {
+// MARK: - SubscribeLanguageView
+private struct SubscribeLanguageView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: CloudTemplateViewModel
-    @State private var searchText = ""
+    @Binding var searchText: String
     
-    var filteredSubscribedSections: [LanguageSection] {
-        if searchText.isEmpty {
-            return viewModel.subscribedSections
-        }
-        return viewModel.subscribedSections.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
+    private var filteredSubscribedSections: [LanguageSection] {
+        let sections = viewModel.languageSections.filter { $0.isSubscribed }
+        guard !searchText.isEmpty else { return sections }
+        return sections.filter { section in
+            section.name.localizedCaseInsensitiveContains(searchText) ||
+            (!section.chineseName.isEmpty && section.chineseName.localizedCaseInsensitiveContains(searchText))
         }
     }
     
-    var filteredUnsubscribedSections: [LanguageSection] {
-        if searchText.isEmpty {
-            return viewModel.unsubscribedSections
-        }
-        return viewModel.unsubscribedSections.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
+    private var filteredUnsubscribedSections: [LanguageSection] {
+        let sections = viewModel.languageSections.filter { !$0.isSubscribed }
+        guard !searchText.isEmpty else { return sections }
+        return sections.filter { section in
+            section.name.localizedCaseInsensitiveContains(searchText) ||
+            (!section.chineseName.isEmpty && section.chineseName.localizedCaseInsensitiveContains(searchText))
         }
     }
     
-    var body: some View {
-        NavigationView {
-            List {
-                if !filteredSubscribedSections.isEmpty {
-                    Section("已订阅") {
-                        ForEach(filteredSubscribedSections) { section in
-                            LanguageSectionRow(section: section, viewModel: viewModel)
-                        }
-                    }
-                }
-                
-                if !filteredUnsubscribedSections.isEmpty {
-                    Section("未订阅") {
-                        ForEach(filteredUnsubscribedSections) { section in
-                            LanguageSectionRow(section: section, viewModel: viewModel)
-                        }
-                    }
-                }
-            }
-            .searchable(text: $searchText, prompt: "搜索语言分区")
-            .navigationTitle("订阅语言分区")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .onAppear {
-            Task {
-                await viewModel.loadLanguageSections()
-            }
-        }
-    }
-}
-
-struct LanguageSectionRow: View {
-    let section: LanguageSection
-    @ObservedObject var viewModel: CloudTemplateViewModel
-    
-    var body: some View {
+    private func sectionRow(_ section: LanguageSection) -> some View {
         HStack {
             VStack(alignment: .leading) {
                 Text(section.name)
+                    .font(.headline)
                 Text("\(section.templatesCount) 个模板")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -389,13 +367,49 @@ struct LanguageSectionRow: View {
             Spacer()
             
             Button {
-                viewModel.toggleSubscription(for: section)
+                Task {
+                    await viewModel.toggleSubscription(for: section)
+                }
             } label: {
                 Image(systemName: section.isSubscribed ? "checkmark.circle.fill" : "plus.circle")
-                    .foregroundColor(section.isSubscribed ? .green : .accentColor)
-                    .imageScale(.large)
+                    .foregroundColor(section.isSubscribed ? .green : .blue)
+                    .font(.title2)
             }
         }
-        .contentShape(Rectangle())
+    }
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                if !filteredSubscribedSections.isEmpty {
+                    Section("已订阅") {
+                        ForEach(filteredSubscribedSections) { section in
+                            sectionRow(section)
+                        }
+                    }
+                }
+                
+                if !filteredUnsubscribedSections.isEmpty {
+                    Section("未订阅") {
+                        ForEach(filteredUnsubscribedSections) { section in
+                            sectionRow(section)
+                        }
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: "搜索语言分区")
+            .navigationTitle("订阅语言分区")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                await viewModel.loadLanguageSections()
+            }
+        }
     }
 } 
