@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 @MainActor
 class CloudTemplateViewModel: ObservableObject {
@@ -11,6 +12,7 @@ class CloudTemplateViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showError = false
+    @AppStorage("subscribedSections") private var subscribedSectionsData: Data = Data()
     
     // MARK: - Language Section Management
     
@@ -20,7 +22,20 @@ class CloudTemplateViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            languageSections = try await service.fetchLanguageSections()
+            // 先从本地加载订阅数据
+            let localSubscribedSections = loadLocalSubscribedSections()
+            
+            // 从服务器获取最新数据
+            var sections = try await service.fetchLanguageSections()
+            
+            // 使用本地数据更新订阅状态
+            sections = sections.map { section in
+                var updatedSection = section
+                updatedSection.isSubscribed = localSubscribedSections.contains { $0.uid == section.uid }
+                return updatedSection
+            }
+            
+            languageSections = sections
             print("✅ Loaded \(languageSections.count) language sections")
         } catch CloudTemplateError.unauthorized {
             print("❌ Unauthorized error")
@@ -48,17 +63,38 @@ class CloudTemplateViewModel: ObservableObject {
         languageSections.filter { !$0.isSubscribed }
     }
     
+    // MARK: - Local Storage
+    
+    private func saveLocalSubscribedSections() {
+        let sections = subscribedSections
+        if let data = try? JSONEncoder().encode(sections) {
+            subscribedSectionsData = data
+        }
+    }
+    
+    private func loadLocalSubscribedSections() -> [LanguageSection] {
+        if let sections = try? JSONDecoder().decode([LanguageSection].self, from: subscribedSectionsData) {
+            return sections
+        }
+        return []
+    }
+    
     func loadInitialData(selectedLanguageUid: String) async {
-        // 1. 先加载语言分区
+        // 1. 先从本地加载订阅数据
+        let localSubscribedSections = loadLocalSubscribedSections()
+        
+        // 2. 加载语言分区
         await loadLanguageSections()
         
-        // 2. 根据选中的分区加载模板
+        // 3. 根据选中的分区加载模板
         if !selectedLanguageUid.isEmpty {
-            if let section = languageSections.first(where: { $0.uid == selectedLanguageUid }) {
-                // 如果找到了保存的分区，加载该分区的模板
+            // 检查选中的分区是否在已订阅列表中
+            if let section = languageSections.first(where: { $0.uid == selectedLanguageUid }),
+               localSubscribedSections.contains(where: { $0.uid == selectedLanguageUid }) {
+                // 如果找到了保存的分区且已订阅，加载该分区的模板
                 await loadTemplates(languageSection: section.name)
             } else {
-                // 如果找不到保存的分区，加载所有模板
+                // 如果找不到保存的分区或未订阅，加载所有模板
                 await loadTemplates()
             }
         } else {
@@ -101,6 +137,8 @@ class CloudTemplateViewModel: ObservableObject {
                     var updatedSection = section
                     updatedSection.isSubscribed = isSubscribed
                     languageSections[index] = updatedSection
+                    // 保存到本地存储
+                    saveLocalSubscribedSections()
                 }
             } catch CloudTemplateError.unauthorized {
                 errorMessage = "请先登录"
@@ -125,7 +163,7 @@ class CloudTemplateViewModel: ObservableObject {
             do {
                 let newSection = try await service.createLanguageSection(name: name)
                 languageSections.append(newSection)
-                // 按名称重新���序
+                // 按名称重新排序
                 languageSections.sort { $0.name < $1.name }
             } catch CloudTemplateError.unauthorized {
                 errorMessage = "请先登录"

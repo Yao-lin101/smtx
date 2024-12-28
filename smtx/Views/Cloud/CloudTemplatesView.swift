@@ -173,10 +173,8 @@ struct CloudTemplatesView: View {
         }
         .listStyle(.plain)
         .refreshable {
-            if let section = selectedLanguage {
-                Task {
-                    await viewModel.loadTemplates(languageSection: section.name)
-                }
+            Task {
+                await viewModel.loadInitialData(selectedLanguageUid: selectedLanguageUid)
             }
         }
     }
@@ -193,10 +191,8 @@ struct CloudTemplatesView: View {
             .padding(16)
         }
         .refreshable {
-            if let section = selectedLanguage {
-                Task {
-                    await viewModel.loadTemplates(languageSection: section.name)
-                }
+            Task {
+                await viewModel.loadInitialData(selectedLanguageUid: selectedLanguageUid)
             }
         }
     }
