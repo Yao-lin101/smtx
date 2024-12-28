@@ -17,7 +17,7 @@ class ToastManager: ObservableObject {
             isPresented = true
         }
         // 2秒后自动隐藏
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             withAnimation(.spring()) {
                 self.isPresented = false
             }

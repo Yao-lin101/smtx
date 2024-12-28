@@ -13,6 +13,12 @@ class ImageCacheManager {
         cache.totalCostLimit = 1024 * 1024 * 100  // 100 MB
     }
     
+    private func withLock<T>(_ operation: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return operation()
+    }
+    
     func image(for url: URL) -> UIImage? {
         return cache.object(forKey: url.absoluteString as NSString)
     }
@@ -24,10 +30,9 @@ class ImageCacheManager {
         }
         
         // 2. 如果已经有相同URL的加载任务，等待其完成
-        lock.lock()
-        if let existingTask = loadingTasks[url] {
-            lock.unlock()
-            return try await existingTask.value ?? UIImage()
+        let existingTask = withLock { loadingTasks[url] }
+        if let task = existingTask {
+            return try await task.value ?? UIImage()
         }
         
         // 3. 创建新的加载任务
@@ -62,14 +67,18 @@ class ImageCacheManager {
             return image
         }
         
-        loadingTasks[url] = task
-        lock.unlock()
+        // 保存任务
+        withLock {
+            loadingTasks[url] = task
+        }
         
         // 4. 等待任务完成并清理
         defer {
-            lock.lock()
-            loadingTasks[url] = nil
-            lock.unlock()
+            Task {
+                withLock {
+                    loadingTasks[url] = nil
+                }
+            }
         }
         
         return try await task.value ?? UIImage()

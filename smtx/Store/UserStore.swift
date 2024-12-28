@@ -3,10 +3,15 @@ import SwiftUI
 
 @MainActor
 class UserStore: ObservableObject {
-    static let shared: UserStore = {
-        let store = UserStore()
-        return store
-    }()
+    // 使用 actor-isolated 的方式实现单例
+    private static var _shared: UserStore?
+    
+    static var shared: UserStore {
+        if _shared == nil {
+            _shared = UserStore()
+        }
+        return _shared!
+    }
     
     @Published private(set) var currentUser: User?
     @Published private(set) var isAuthenticated = false
@@ -105,9 +110,12 @@ class UserStore: ObservableObject {
     }
 }
 
-// 用于在视图中访问 UserStore
+// MARK: - Environment
 struct UserStateKey: EnvironmentKey {
-    static let defaultValue = UserStore.shared
+    @MainActor
+    static var defaultValue: UserStore {
+        UserStore.shared
+    }
 }
 
 extension EnvironmentValues {
@@ -117,7 +125,7 @@ extension EnvironmentValues {
     }
 }
 
-// 用于在视图中检查认证状态
+// MARK: - RequireAuth
 struct RequireAuth<Content: View>: View {
     @Environment(\.userStore) private var userStore
     @ViewBuilder let content: () -> Content
@@ -140,5 +148,5 @@ struct RequireAuth<Content: View>: View {
                 }
             }
         }
-    }
-} 
+    } 
+}
