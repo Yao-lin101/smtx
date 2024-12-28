@@ -430,6 +430,34 @@ class AuthService {
             throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
         }
     }
+    
+    func fetchUserCount() async throws -> Int {
+        let request = makeRequest(
+            "/users/count/",
+            method: "GET"
+        )
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AuthError.networkError("无效的响应")
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw AuthError.unauthorized
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
+        }
+        
+        do {
+            let response = try JSONDecoder().decode([String: Int].self, from: data)
+            return response["total"] ?? 0
+        } catch {
+            throw AuthError.decodingError
+        }
+    }
 }
 
 // 请求模型

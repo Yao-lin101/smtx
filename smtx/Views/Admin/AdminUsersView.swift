@@ -39,9 +39,20 @@ struct AdminUsersView: View {
             .listRowInsets(EdgeInsets())
             .padding(.horizontal)
             
+            // 用户总数
+            HStack {
+                Image(systemName: "person.3")
+                    .foregroundColor(.secondary)
+                Text("总用户数：\(viewModel.totalUsers)")
+                    .foregroundColor(.secondary)
+                    .font(.subheadline)
+            }
+            .padding(.horizontal)
+            .listRowBackground(Color.clear)
+            
             // 用户列表
             if viewModel.users.isEmpty && !viewModel.isLoading {
-                Text(searchText.isEmpty ? "暂无用户" : "未找到相关用户")
+                Text(searchText.isEmpty ? "请输入搜索内容" : "未找到相关用户")
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
@@ -50,9 +61,6 @@ struct AdminUsersView: View {
                     UserRow(user: user) {
                         userToToggle = user
                         showingConfirmation = true
-                    }
-                    .task {
-                        await viewModel.loadMoreIfNeeded(currentUser: user)
                     }
                 }
                 
@@ -64,6 +72,10 @@ struct AdminUsersView: View {
             }
         }
         .listStyle(.plain)
+        .task {
+            // 只在页面加载时获取用户总数
+            await viewModel.loadUserCount()
+        }
         .alert("确认操作", isPresented: $showingConfirmation) {
             Button("取消", role: .cancel) { }
             Button(userToToggle?.isActive == true ? "封禁" : "解封", role: .destructive) {

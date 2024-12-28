@@ -14,6 +14,7 @@ class AdminViewModel: ObservableObject {
     @Published var showError = false
     @Published var hasMoreUsers = true
     @Published var currentPage = 1
+    @Published var totalUsers = 0
     
     // MARK: - Language Section Management
     
@@ -177,6 +178,7 @@ class AdminViewModel: ObservableObject {
             let response = try await authService.fetchUsers(search: query, page: currentPage)
             if reset {
                 users = response.results
+                totalUsers = response.count  // 更新总用户数
             } else {
                 users.append(contentsOf: response.results)
             }
@@ -205,5 +207,13 @@ class AdminViewModel: ObservableObject {
         }
         
         await searchUsers(query: "", reset: false)
+    }
+    
+    func loadUserCount() async {
+        do {
+            totalUsers = try await authService.fetchUserCount()
+        } catch {
+            print("Failed to fetch user count:", error)
+        }
     }
 } 
