@@ -9,18 +9,17 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            // 云模板页（预留）
+            // 云模板页
             NavigationStack(path: $cloudRouter.path) {
                 CloudTemplatesView()
                     .navigationDestination(for: Route.self) { route in
-                        switch route {
-                        case .languageSection, .templateDetail, .createTemplate, .recording:
-                            // 云模板功能尚未实现
-                            EmptyView()
-                        case .profile, .profileDetail, .settings, .help, .about, .avatarPreview, .emailRegister:
-                            // 这些路由在云模板页面不需要处理
-                            EmptyView()
-                        }
+                        cloudRouter.view(for: route)
+                    }
+                    .sheet(item: $cloudRouter.sheet) { route in
+                        cloudRouter.view(for: route)
+                    }
+                    .fullScreenCover(item: $cloudRouter.fullScreenCover) { route in
+                        cloudRouter.view(for: route)
                     }
             }
             .environmentObject(cloudRouter)  // 云模板使用 cloudRouter
@@ -44,7 +43,8 @@ struct MainTabView: View {
                             if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId) {
                                 RecordingView(template: template, recordId: recordId)
                             }
-                        case .profile, .profileDetail, .settings, .help, .about, .avatarPreview, .emailRegister:
+                        case .profile, .profileDetail, .settings, .help, .about, .avatarPreview, .emailRegister,
+                             .cloudTemplateDetail:
                             // 这些路由在本地模板页面不需要处理
                             EmptyView()
                         }
@@ -73,7 +73,8 @@ struct MainTabView: View {
                             AvatarPreviewView(imageURL: imageURL)
                         case .emailRegister:
                             EmailRegisterView()
-                        case .languageSection, .templateDetail, .createTemplate, .recording, .profile:
+                        case .languageSection, .templateDetail, .createTemplate, .recording,
+                             .profile, .cloudTemplateDetail:
                             // 这些路由在个人中心不需要处理
                             EmptyView()
                         }

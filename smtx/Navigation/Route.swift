@@ -1,11 +1,14 @@
 import Foundation
 
-enum Route: Hashable {
+enum Route: Hashable, Identifiable {
     // 模板相关路由
     case languageSection(String)
     case templateDetail(String)
     case createTemplate(String, String?)
     case recording(String, String?)
+    
+    // 云模板相关路由
+    case cloudTemplateDetail(String)
     
     // 个人中心路由
     case profile
@@ -14,7 +17,36 @@ enum Route: Hashable {
     case about
     case help
     case avatarPreview(String)
-    case emailRegister  // 添加注册路由
+    case emailRegister
+    
+    var id: String {
+        switch self {
+        case .languageSection(let language):
+            return "languageSection-\(language)"
+        case .templateDetail(let templateId):
+            return "templateDetail-\(templateId)"
+        case .createTemplate(let language, let templateId):
+            return "createTemplate-\(language)-\(templateId ?? "new")"
+        case .recording(let templateId, let recordId):
+            return "recording-\(templateId)-\(recordId ?? "new")"
+        case .profile:
+            return "profile"
+        case .profileDetail:
+            return "profileDetail"
+        case .settings:
+            return "settings"
+        case .about:
+            return "about"
+        case .help:
+            return "help"
+        case .avatarPreview(let url):
+            return "avatarPreview-\(url)"
+        case .emailRegister:
+            return "emailRegister"
+        case .cloudTemplateDetail(let uid):
+            return "cloudTemplateDetail-\(uid)"
+        }
+    }
     
     func hash(into hasher: inout Hasher) {
         switch self {
@@ -47,6 +79,9 @@ enum Route: Hashable {
             hasher.combine(url)
         case .emailRegister:
             hasher.combine(10)
+        case .cloudTemplateDetail(let uid):
+            hasher.combine(11)
+            hasher.combine(uid)
         }
     }
     
@@ -64,14 +99,44 @@ enum Route: Hashable {
              (.profileDetail, .profileDetail),
              (.settings, .settings),
              (.about, .about),
-             (.help, .help):
+             (.help, .help),
+             (.emailRegister, .emailRegister):
             return true
         case (.avatarPreview(let l), .avatarPreview(let r)):
             return l == r
-        case (.emailRegister, .emailRegister):
-            return true
+        case (.cloudTemplateDetail(let l), .cloudTemplateDetail(let r)):
+            return l == r
         default:
             return false
+        }
+    }
+    
+    var title: String {
+        switch self {
+        case .languageSection(let language):
+            return language
+        case .templateDetail:
+            return "模板详情"
+        case .createTemplate(_, let templateId):
+            return templateId == nil ? "创建模板" : "编辑模板"
+        case .recording:
+            return "录音"
+        case .profile:
+            return "个人中心"
+        case .profileDetail:
+            return "个人资料"
+        case .settings:
+            return "设置"
+        case .about:
+            return "关于"
+        case .help:
+            return "帮助"
+        case .avatarPreview:
+            return "预览"
+        case .emailRegister:
+            return "邮箱注册"
+        case .cloudTemplateDetail:
+            return "模板详情"
         }
     }
 } 
