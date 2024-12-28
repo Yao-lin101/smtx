@@ -42,9 +42,7 @@ struct SubscribeLanguageView: View {
                     sectionToUnsubscribe = section
                     showingUnsubscribeAlert = true
                 } else {
-                    Task {
-                        try? await viewModel.toggleSubscription(for: section)
-                    }
+                    viewModel.toggleSubscription(for: section)
                 }
             } label: {
                 Image(systemName: section.isSubscribed ? "checkmark.circle.fill" : "plus.circle")
@@ -84,15 +82,13 @@ struct SubscribeLanguageView: View {
                 }
             }
             .task {
-                try? await viewModel.loadLanguageSections()
+                await viewModel.loadLanguageSections()
             }
             .alert("确认取消订阅", isPresented: $showingUnsubscribeAlert) {
                 Button("取消", role: .cancel) { }
                 Button("确定", role: .destructive) {
                     if let section = sectionToUnsubscribe {
-                        Task {
-                            try? await viewModel.toggleSubscription(for: section)
-                        }
+                        viewModel.toggleSubscription(for: section)
                     }
                 }
             } message: {

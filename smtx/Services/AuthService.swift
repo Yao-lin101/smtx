@@ -157,11 +157,11 @@ class AuthService {
         } catch {
             if let decodingError = error as? DecodingError {
                 switch decodingError {
-                case .keyNotFound(let key, let context):
+                case .keyNotFound(let key, _):
                     throw AuthError.serverError("缺少字段：\(key.stringValue)")
-                case .typeMismatch(let type, let context):
+                case .typeMismatch(_, let context):
                     throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                case .valueNotFound(let type, let context):
+                case .valueNotFound(_, let context):
                     throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
                 case .dataCorrupted(let context):
                     throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
@@ -225,11 +225,11 @@ class AuthService {
         } catch {
             if let decodingError = error as? DecodingError {
                 switch decodingError {
-                case .keyNotFound(let key, let context):
+                case .keyNotFound(let key, _):
                     throw AuthError.serverError("缺少字段：\(key.stringValue)")
-                case .typeMismatch(let type, let context):
+                case .typeMismatch(_, let context):
                     throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                case .valueNotFound(let type, let context):
+                case .valueNotFound(_, let context):
                     throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
                 case .dataCorrupted(let context):
                     throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
