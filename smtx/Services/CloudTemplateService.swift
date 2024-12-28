@@ -446,15 +446,6 @@ class CloudTemplateService {
     }
 }
 
-// MARK: - Response Models
-
-struct PaginatedResponse<T: Codable>: Codable {
-    let count: Int
-    let next: String?
-    let previous: String?
-    let results: [T]
-}
-
 struct LanguageSection: Codable, Identifiable, Equatable {
     let uid: String
     let name: String

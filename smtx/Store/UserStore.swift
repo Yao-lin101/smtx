@@ -16,6 +16,8 @@ class UserStore: ObservableObject {
     @Published private(set) var currentUser: User?
     @Published private(set) var isAuthenticated = false
     @Published private(set) var isLoading = false
+    @Published var accessToken: String?
+    @Published var refreshToken: String?
     
     private init() {
         // 尝试从本地加载用户信息
@@ -107,6 +109,20 @@ class UserStore: ObservableObject {
         
         self.currentUser = user
         self.isAuthenticated = true
+    }
+    
+    func saveTokens(access: String, refresh: String) {
+        accessToken = access
+        refreshToken = refresh
+        UserDefaults.standard.set(access, forKey: "accessToken")
+        UserDefaults.standard.set(refresh, forKey: "refreshToken")
+    }
+    
+    func clearTokens() {
+        accessToken = nil
+        refreshToken = nil
+        UserDefaults.standard.removeObject(forKey: "accessToken")
+        UserDefaults.standard.removeObject(forKey: "refreshToken")
     }
 }
 

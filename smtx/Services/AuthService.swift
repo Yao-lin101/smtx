@@ -10,6 +10,7 @@ enum AuthError: LocalizedError {
     case serverError(String)
     case unauthorized
     case usernameExists
+    case decodingError
     
     var errorDescription: String? {
         switch self {
@@ -29,6 +30,8 @@ enum AuthError: LocalizedError {
             return "未授权"
         case .usernameExists:
             return "该昵称已被使用"
+        case .decodingError:
+            return "数据解析失败"
         }
     }
 }
@@ -53,20 +56,40 @@ class AuthService {
         self.session = URLSession(configuration: configuration)
     }
     
-    private func makeRequest<T: Encodable>(_ endpoint: String, method: String, body: T) -> URLRequest {
-        let url = URL(string: "\(baseURL)/\(endpoint)")!
+    private func makeRequest(_ path: String, method: String, body: Encodable? = nil, queryItems: [URLQueryItem]? = nil) -> URLRequest {
+        var urlComponents = URLComponents(string: baseURL)!
+        
+        // 确保路径以斜杠开始
+        var normalizedPath = path
+        if !normalizedPath.hasPrefix("/") {
+            normalizedPath = "/" + normalizedPath
+        }
+        // 确保路径以斜杠结束
+        if !normalizedPath.hasSuffix("/") {
+            normalizedPath += "/"
+        }
+        
+        urlComponents.path += normalizedPath
+        urlComponents.queryItems = queryItems
+        
+        guard let url = urlComponents.url else {
+            fatalError("Invalid URL: \(baseURL)\(normalizedPath)")
+        }
+        
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // 增加超时时间到30秒
-        request.timeoutInterval = 30
+        // 只有非 GET 请求才设置请求体
+        if method != "GET", let body = body {
+            let encoder = JSONEncoder()
+            request.httpBody = try? encoder.encode(body)
+        }
         
-        // 配置缓存策略
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        
-        let encoder = JSONEncoder()
-        request.httpBody = try? encoder.encode(body)
+        // 使用 TokenManager 获取 token
+        if let token = TokenManager.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         
         return request
     }
@@ -337,6 +360,76 @@ class AuthService {
         
         return try JSONDecoder().decode(User.self, from: data)
     }
+    
+    // MARK: - User Management
+    
+    func fetchUsers(search: String = "", page: Int = 1) async throws -> PaginatedResponse<User> {
+        var queryItems: [URLQueryItem] = [URLQueryItem(name: "page", value: "\(page)")]
+        if !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+        
+        let request = makeRequest(
+            "/users/",
+            method: "GET",
+            queryItems: queryItems
+        )
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AuthError.networkError("无效的响应")
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw AuthError.unauthorized
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            return try decoder.decode(PaginatedResponse<User>.self, from: data)
+        } catch {
+            print("Decoding Error:", error)
+            throw AuthError.decodingError
+        }
+    }
+    
+    func toggleUserBan(uid: String) async throws -> String {
+        let request = makeRequest(
+            "/users/\(uid)/ban/",
+            method: "POST",
+            body: EmptyBody()
+        )
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AuthError.networkError("无效的响应")
+        }
+        
+        if httpResponse.statusCode == 401 {
+            throw AuthError.unauthorized
+        }
+        
+        if httpResponse.statusCode == 404 {
+            throw AuthError.serverError("用户不存在")
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
+        }
+        
+        do {
+            let response = try JSONDecoder().decode([String: String].self, from: data)
+            return response["message"] ?? "操作成功"
+        } catch {
+            throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
+        }
+    }
 }
 
 // 请求模型
@@ -347,7 +440,8 @@ struct RegisterRequest: Codable {
 }
 
 // 响应模型
-struct User: Codable {
+struct User: Codable, Identifiable {
+    var id: String { uid }
     let uid: String
     let username: String
     let email: String
@@ -358,6 +452,7 @@ struct User: Codable {
     let wechatId: String?
     let createdAt: String
     let isSuperuser: Bool
+    var isActive: Bool
     
     enum CodingKeys: String, CodingKey {
         case uid
@@ -370,6 +465,7 @@ struct User: Codable {
         case wechatId = "wechat_id"
         case createdAt = "created_at"
         case isSuperuser = "is_superuser"
+        case isActive = "is_active"
     }
     
     init(from decoder: Decoder) throws {
@@ -381,33 +477,14 @@ struct User: Codable {
         avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
         bio = try container.decodeIfPresent(String.self, forKey: .bio)
         
-        // 处理布尔值，支持数字和布尔类型
-        if let boolValue = try? container.decode(Bool.self, forKey: .isEmailVerified) {
-            isEmailVerified = boolValue
-        } else if let intValue = try? container.decode(Int.self, forKey: .isEmailVerified) {
-            isEmailVerified = intValue != 0
-        } else {
-            isEmailVerified = false
-        }
+        // 强制解码 is_active，如果字段缺失会抛出错误
+        isActive = try container.decode(Bool.self, forKey: .isActive)
         
-        if let boolValue = try? container.decode(Bool.self, forKey: .isWechatVerified) {
-            isWechatVerified = boolValue
-        } else if let intValue = try? container.decode(Int.self, forKey: .isWechatVerified) {
-            isWechatVerified = intValue != 0
-        } else {
-            isWechatVerified = false
-        }
-        
-        if let boolValue = try? container.decode(Bool.self, forKey: .isSuperuser) {
-            isSuperuser = boolValue
-        } else if let intValue = try? container.decode(Int.self, forKey: .isSuperuser) {
-            isSuperuser = intValue != 0
-        } else {
-            isSuperuser = false
-        }
-        
+        isEmailVerified = try container.decode(Bool.self, forKey: .isEmailVerified)
+        isWechatVerified = try container.decode(Bool.self, forKey: .isWechatVerified)
         wechatId = try container.decodeIfPresent(String.self, forKey: .wechatId)
         createdAt = try container.decode(String.self, forKey: .createdAt)
+        isSuperuser = try container.decode(Bool.self, forKey: .isSuperuser)
     }
 }
 
@@ -434,10 +511,7 @@ struct LoginResponse: Codable {
     let refresh: String
     let access: String
     let user: User
-    
-    enum CodingKeys: String, CodingKey {
-        case refresh
-        case access
-        case user
-    }
-} 
+}
+
+// 空请求体结构体
+struct EmptyBody: Codable {} 
