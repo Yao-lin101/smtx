@@ -187,6 +187,12 @@ class AuthService {
         
         let (data, response) = try await session.data(for: request)
         
+        #if DEBUG
+        if let json = try? JSONSerialization.jsonObject(with: data, options: []) {
+            print("Login Response:", json)
+        }
+        #endif
+        
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AuthError.networkError("无效的响应")
         }
@@ -351,6 +357,7 @@ struct User: Codable {
     let isWechatVerified: Bool
     let wechatId: String?
     let createdAt: String
+    let isSuperuser: Bool
     
     enum CodingKeys: String, CodingKey {
         case uid
@@ -362,6 +369,7 @@ struct User: Codable {
         case isWechatVerified = "is_wechat_verified"
         case wechatId = "wechat_id"
         case createdAt = "created_at"
+        case isSuperuser = "is_superuser"
     }
     
     init(from decoder: Decoder) throws {
@@ -373,7 +381,7 @@ struct User: Codable {
         avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
         bio = try container.decodeIfPresent(String.self, forKey: .bio)
         
-        // 处理布尔值，持数字和布尔类型
+        // 处理布尔值，支持数字和布尔类型
         if let boolValue = try? container.decode(Bool.self, forKey: .isEmailVerified) {
             isEmailVerified = boolValue
         } else if let intValue = try? container.decode(Int.self, forKey: .isEmailVerified) {
@@ -388,6 +396,14 @@ struct User: Codable {
             isWechatVerified = intValue != 0
         } else {
             isWechatVerified = false
+        }
+        
+        if let boolValue = try? container.decode(Bool.self, forKey: .isSuperuser) {
+            isSuperuser = boolValue
+        } else if let intValue = try? container.decode(Int.self, forKey: .isSuperuser) {
+            isSuperuser = intValue != 0
+        } else {
+            isSuperuser = false
         }
         
         wechatId = try container.decodeIfPresent(String.self, forKey: .wechatId)

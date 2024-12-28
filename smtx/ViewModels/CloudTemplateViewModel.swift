@@ -16,23 +16,29 @@ class CloudTemplateViewModel: ObservableObject {
     
     func loadLanguageSections() {
         Task {
+            print("🔄 Start loading language sections")
             isLoading = true
             errorMessage = nil
             
             do {
                 languageSections = try await service.fetchLanguageSections()
+                print("✅ Loaded \(languageSections.count) language sections")
             } catch CloudTemplateError.unauthorized {
+                print("❌ Unauthorized error")
                 errorMessage = "请先登录"
                 showError = true
             } catch CloudTemplateError.serverError(let message) {
+                print("❌ Server error: \(message)")
                 errorMessage = message
                 showError = true
             } catch {
+                print("❌ Loading error: \(error)")
                 errorMessage = "加载语言分区失败"
                 showError = true
             }
             
             isLoading = false
+            print("🏁 Finished loading language sections")
         }
     }
     

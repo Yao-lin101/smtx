@@ -44,7 +44,7 @@ struct MainTabView: View {
                                 RecordingView(template: template, recordId: recordId)
                             }
                         case .profile, .profileDetail, .settings, .help, .about, .avatarPreview, .emailRegister,
-                             .cloudTemplateDetail:
+                             .cloudTemplateDetail, .adminPanel, .adminUsers, .adminLanguageSections:
                             // 这些路由在本地模板页面不需要处理
                             EmptyView()
                         }
@@ -73,6 +73,12 @@ struct MainTabView: View {
                             AvatarPreviewView(imageURL: imageURL)
                         case .emailRegister:
                             EmailRegisterView()
+                        case .adminPanel:
+                            AdminPanelView()
+                        case .adminUsers:
+                            AdminUsersView()
+                        case .adminLanguageSections:
+                            AdminLanguageSectionsView()
                         case .languageSection, .templateDetail, .createTemplate, .recording,
                              .profile, .cloudTemplateDetail:
                             // 这些路由在个人中心不需要处理

@@ -125,6 +125,16 @@ struct ProfileView: View {
                             title: "关于",
                             action: { router.navigate(to: .about) }
                         )
+                        Divider()
+                        if let user = userStore.currentUser {
+                            if user.isSuperuser {
+                                MenuRow(
+                                    icon: "gearshape.2.fill",
+                                    title: "后台管理",
+                                    action: { router.navigate(to: .adminPanel) }
+                                )
+                            }
+                        }
                     }
                     .background(Color(.systemBackground))
                     
@@ -159,7 +169,7 @@ struct ProfileView: View {
                 
                 // 登录表单
                 VStack(spacing: 16) {
-                    VStack(spacing: 8) {  // 将邮箱和密码输入框放在一起，间距设为8
+                    VStack(spacing: 8) {  // 邮箱和密码输入框放在一起，间距设为8
                         // 邮箱输入区域
                         HStack(spacing: 0) {
                             TextField("邮箱前缀", text: $emailPrefix)

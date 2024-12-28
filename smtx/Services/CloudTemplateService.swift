@@ -12,7 +12,13 @@ enum CloudTemplateError: Error {
 
 class CloudTemplateService {
     static let shared = CloudTemplateService()
-    private let baseURL = "http://localhost:8000/api"
+    
+    #if DEBUG
+    private let baseURL = "http://192.168.1.102:8000/api"  // 使用服务器的局域网 IP
+    #else
+    private let baseURL = "https://api.example.com/api"  // 生产环境（待配置）
+    #endif
+    
     private let tokenManager = TokenManager.shared
     
     private init() {}
@@ -31,7 +37,12 @@ class CloudTemplateService {
         // 添加认证token
         if let token = tokenManager.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            print("🔐 Using token: \(token)")
+        } else {
+            print("⚠️ No token available")
         }
+        
+        print("📡 Fetching language sections from: \(url)")
         
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -40,24 +51,55 @@ class CloudTemplateService {
                 throw CloudTemplateError.invalidResponse
             }
             
+            print("📥 Response status code: \(httpResponse.statusCode)")
+            
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📦 Response data: \(responseString)")
+            }
+            
             switch httpResponse.statusCode {
             case 200:
                 let decoder = JSONDecoder()
                 decoder.keyDecodingStrategy = .convertFromSnakeCase
+                
+                // 配置日期解码器以处理带时区的ISO8601格式
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                decoder.dateDecodingStrategy = .custom { decoder in
+                    let container = try decoder.singleValueContainer()
+                    let dateString = try container.decode(String.self)
+                    
+                    if let date = formatter.date(from: dateString) {
+                        return date
+                    }
+                    
+                    throw DecodingError.dataCorruptedError(
+                        in: container,
+                        debugDescription: "Invalid date format"
+                    )
+                }
+                
                 let result = try decoder.decode(PaginatedResponse<LanguageSection>.self, from: data)
+                print("✅ Successfully decoded \(result.results.count) language sections")
                 return result.results
             case 401:
+                print("❌ Unauthorized")
                 throw CloudTemplateError.unauthorized
             case 400...499:
+                print("❌ Client error: \(httpResponse.statusCode)")
                 throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
             case 500...599:
+                print("❌ Server error: \(httpResponse.statusCode)")
                 throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
             default:
+                print("❌ Unknown error: \(httpResponse.statusCode)")
                 throw CloudTemplateError.unknown
             }
         } catch let error as CloudTemplateError {
+            print("❌ CloudTemplateError: \(error)")
             throw error
         } catch {
+            print("❌ Network error: \(error)")
             throw CloudTemplateError.networkError(error)
         }
     }

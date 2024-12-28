@@ -81,6 +81,12 @@ class NavigationRouter: ObservableObject {
             EmailRegisterView()
         case .cloudTemplateDetail(let uid):
             CloudTemplateDetailView(uid: uid)
+        case .adminPanel:
+            AdminPanelView()
+        case .adminUsers:
+            AdminUsersView()
+        case .adminLanguageSections:
+            AdminLanguageSectionsView()
         }
     }
 } 

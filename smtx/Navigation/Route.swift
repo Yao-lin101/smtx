@@ -10,6 +10,11 @@ enum Route: Hashable, Identifiable {
     // 云模板相关路由
     case cloudTemplateDetail(String)
     
+    // 后台管理路由
+    case adminPanel
+    case adminUsers
+    case adminLanguageSections
+    
     // 个人中心路由
     case profile
     case profileDetail
@@ -45,6 +50,12 @@ enum Route: Hashable, Identifiable {
             return "emailRegister"
         case .cloudTemplateDetail(let uid):
             return "cloudTemplateDetail-\(uid)"
+        case .adminPanel:
+            return "adminPanel"
+        case .adminUsers:
+            return "adminUsers"
+        case .adminLanguageSections:
+            return "adminLanguageSections"
         }
     }
     
@@ -82,6 +93,12 @@ enum Route: Hashable, Identifiable {
         case .cloudTemplateDetail(let uid):
             hasher.combine(11)
             hasher.combine(uid)
+        case .adminPanel:
+            hasher.combine(12)
+        case .adminUsers:
+            hasher.combine(13)
+        case .adminLanguageSections:
+            hasher.combine(14)
         }
     }
     
@@ -100,7 +117,10 @@ enum Route: Hashable, Identifiable {
              (.settings, .settings),
              (.about, .about),
              (.help, .help),
-             (.emailRegister, .emailRegister):
+             (.emailRegister, .emailRegister),
+             (.adminPanel, .adminPanel),
+             (.adminUsers, .adminUsers),
+             (.adminLanguageSections, .adminLanguageSections):
             return true
         case (.avatarPreview(let l), .avatarPreview(let r)):
             return l == r
@@ -137,6 +157,12 @@ enum Route: Hashable, Identifiable {
             return "邮箱注册"
         case .cloudTemplateDetail:
             return "模板详情"
+        case .adminPanel:
+            return "后台管理"
+        case .adminUsers:
+            return "用户管理"
+        case .adminLanguageSections:
+            return "语言分区管理"
         }
     }
 } 
