@@ -3,15 +3,27 @@ import SwiftUI
 struct AdminLanguageSectionsView: View {
     @StateObject private var viewModel = AdminViewModel()
     @State private var showingCreateSheet = false
+    @State private var showingEditSheet = false
     @State private var newSectionName = ""
     @State private var newSectionChineseName = ""
+    @State private var searchText = ""
+    @State private var sectionToEdit: LanguageSection?
     @State private var showingDeleteAlert = false
     @State private var sectionToDelete: LanguageSection?
-    @State private var showingSuccessAlert = false
+    
+    var filteredSections: [LanguageSection] {
+        if searchText.isEmpty {
+            return viewModel.languageSections
+        }
+        return viewModel.languageSections.filter { section in
+            section.name.localizedCaseInsensitiveContains(searchText) ||
+            section.chineseName.localizedCaseInsensitiveContains(searchText)
+        }
+    }
     
     var body: some View {
         List {
-            ForEach(viewModel.languageSections) { section in
+            ForEach(filteredSections) { section in
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(section.name)
@@ -25,24 +37,36 @@ struct AdminLanguageSectionsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
-                    Spacer()
-                    
-                    Button {
+                }
+                .swipeActions(edge: .trailing) {
+                    Button{
                         sectionToDelete = section
                         showingDeleteAlert = true
                     } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
+                        Label("删除", systemImage: "trash")
                     }
+                    .tint(.red)
+                    
+                    Button {
+                        sectionToEdit = section
+                        newSectionName = section.name
+                        newSectionChineseName = section.chineseName
+                        showingEditSheet = true
+                    } label: {
+                        Label("编辑", systemImage: "pencil")
+                    }
+                    .tint(.blue)
                 }
             }
         }
+        .searchable(text: $searchText, prompt: "搜索语言分区")
         .navigationTitle("语言分区管理")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
+                    newSectionName = ""
+                    newSectionChineseName = ""
                     showingCreateSheet = true
                 } label: {
                     Image(systemName: "plus")
@@ -69,22 +93,61 @@ struct AdminLanguageSectionsView: View {
                         Button("创建") {
                             if !newSectionName.isEmpty {
                                 Task {
-                                    print("📝 开始创建语言分区")
                                     await viewModel.createLanguageSection(
                                         name: newSectionName,
                                         chineseName: newSectionChineseName
                                     )
                                     
-                                    print("🔍 检查创建结果: showError = \(viewModel.showError)")
                                     if !viewModel.showError {
-                                        print("✅ 创建成功，刷新列表")
                                         await viewModel.loadLanguageSections()
                                         newSectionName = ""
                                         newSectionChineseName = ""
                                         showingCreateSheet = false
-                                        showingSuccessAlert = true
+                                        ToastManager.shared.show("创建成功")
                                     } else {
-                                        print("❌ 创建失败: \(viewModel.errorMessage ?? "未知错误")")
+                                        ToastManager.shared.show(viewModel.errorMessage ?? "创建失败", type: .error)
+                                    }
+                                }
+                            }
+                        }
+                        .disabled(newSectionName.isEmpty)
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("分区名称", text: $newSectionName)
+                        TextField("中文备注（可选）", text: $newSectionChineseName)
+                    }
+                }
+                .navigationTitle("编辑语言分区")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("取消") {
+                            showingEditSheet = false
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("保存") {
+                            if !newSectionName.isEmpty, let section = sectionToEdit {
+                                Task {
+                                    await viewModel.updateLanguageSection(
+                                        uid: section.uid,
+                                        name: newSectionName,
+                                        chineseName: newSectionChineseName
+                                    )
+                                    
+                                    if !viewModel.showError {
+                                        await viewModel.loadLanguageSections()
+                                        showingEditSheet = false
+                                        ToastManager.shared.show("更新成功")
+                                    } else {
+                                        ToastManager.shared.show(viewModel.errorMessage ?? "更新失败", type: .error)
                                     }
                                 }
                             }
@@ -96,35 +159,26 @@ struct AdminLanguageSectionsView: View {
             .presentationDetents([.medium])
         }
         .alert("确认删除", isPresented: $showingDeleteAlert) {
-            Button("取消", role: .cancel) {}
+            Button("取消", role: .cancel) { }
             Button("删除", role: .destructive) {
                 if let section = sectionToDelete {
                     Task {
                         await viewModel.deleteLanguageSection(uid: section.uid)
                         if !viewModel.showError {
                             await viewModel.loadLanguageSections()
-                            showingDeleteAlert = false
+                            ToastManager.shared.show("删除成功")
+                        } else {
+                            ToastManager.shared.show(viewModel.errorMessage ?? "删除失败", type: .error)
                         }
                     }
                 }
             }
         } message: {
             if let section = sectionToDelete {
-                Text("确定要删除语言分区\"\(section.name)\"吗？该操作不可恢复。")
+                Text("确定要删除语言分区「\(section.name)」吗？该操作不可恢复。")
             }
         }
-        .alert("成功", isPresented: $showingSuccessAlert) {
-            Button("确定", role: .cancel) {}
-        } message: {
-            Text("语言分区创建成功")
-        }
-        .alert("错误", isPresented: $viewModel.showError) {
-            Button("确定", role: .cancel) {}
-        } message: {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-            }
-        }
+        .toastManager()
         .onAppear {
             Task {
                 await viewModel.loadLanguageSections()
