@@ -88,9 +88,7 @@ struct ProfileDetailView: View {
     @State private var newBio = ""
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    @State private var showingToast = false
     @State private var showingBioEditor = false
-    @State private var toastType: ToastView.ToastType = .success
     
     private let usernameMaxLength = 20  // 添加用户名最大长度常量
     
@@ -164,7 +162,7 @@ struct ProfileDetailView: View {
         } message: {
             Text(alertMessage)
         }
-        .toast(isPresented: $showingToast, message: alertMessage, type: toastType)
+        .toastManager()
     }
     
     // MARK: - Private Methods
@@ -202,6 +200,7 @@ struct ProfileDetailView: View {
                     }
                     userStore.updateUserInfo(updatedUser)
                     isUploadingAvatar = false
+                    ToastManager.shared.show("头像更新成功")
                 }
             } catch {
                 await MainActor.run {
@@ -213,27 +212,13 @@ struct ProfileDetailView: View {
         }
     }
     
-    private func showToast(_ message: String, type: ToastView.ToastType = .success) {
-        alertMessage = message
-        toastType = type
-        withAnimation(.spring()) {
-            showingToast = true
-        }
-        // 2秒后自动隐藏
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            withAnimation(.spring()) {
-                showingToast = false
-            }
-        }
-    }
-    
     private func updateUsername(_ username: String) {
         if username.isEmpty {
-            showToast("昵称不能为空", type: .error)
+            ToastManager.shared.show("昵称不能为空", type: .error)
             return
         }
         if username.count > usernameMaxLength {
-            showToast("昵称不能超过20个字符", type: .error)
+            ToastManager.shared.show("昵称不能超过20个字符", type: .error)
             return
         }
         
@@ -242,14 +227,14 @@ struct ProfileDetailView: View {
                 let updatedUser = try await AuthService.shared.updateProfile(["username": username])
                 await MainActor.run {
                     userStore.updateUserInfo(updatedUser)
-                    showToast("昵称更新成功", type: .success)
+                    ToastManager.shared.show("昵称更新成功")
                 }
             } catch {
                 await MainActor.run {
                     if let authError = error as? AuthError {
-                        showToast(authError.localizedDescription, type: .error)
+                        ToastManager.shared.show(authError.localizedDescription, type: .error)
                     } else {
-                        showToast(error.localizedDescription, type: .error)
+                        ToastManager.shared.show(error.localizedDescription, type: .error)
                     }
                 }
             }
@@ -258,7 +243,7 @@ struct ProfileDetailView: View {
     
     private func updateBio(_ bio: String) {
         if bio.count > 200 {
-            showToast("简介不能超过200字", type: .error)
+            ToastManager.shared.show("简介不能超过200字", type: .error)
             return
         }
         
@@ -267,14 +252,14 @@ struct ProfileDetailView: View {
                 let updatedUser = try await AuthService.shared.updateProfile(["bio": bio])
                 await MainActor.run {
                     userStore.updateUserInfo(updatedUser)
-                    showToast("简介更新成功", type: .success)
+                    ToastManager.shared.show("简介更新成功")
                 }
             } catch {
                 await MainActor.run {
                     if let authError = error as? AuthError {
-                        showToast(authError.localizedDescription, type: .error)
+                        ToastManager.shared.show(authError.localizedDescription, type: .error)
                     } else {
-                        showToast(error.localizedDescription, type: .error)
+                        ToastManager.shared.show(error.localizedDescription, type: .error)
                     }
                 }
             }
