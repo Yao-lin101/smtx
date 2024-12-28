@@ -13,7 +13,7 @@ struct AdminUsersView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
-                TextField("搜索 UID、用户名或邮箱", text: $searchText)
+                TextField("搜索 UID", text: $searchText)
                     .textFieldStyle(.plain)
                     .onSubmit {
                         searchTask?.cancel()
