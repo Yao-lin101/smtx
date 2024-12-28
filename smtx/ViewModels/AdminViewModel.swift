@@ -78,4 +78,22 @@ class AdminViewModel: ObservableObject {
         
         isLoading = false
     }
+    
+    func updateLanguageSection(uid: String, name: String, chineseName: String = "") async {
+        isLoading = true
+        showError = false
+        errorMessage = nil
+        
+        do {
+            _ = try await service.updateLanguageSection(uid: uid, name: name, chineseName: chineseName)
+        } catch let error as CloudTemplateError {
+            showError = true
+            errorMessage = error.localizedDescription
+        } catch {
+            showError = true
+            errorMessage = "更新语言分区失败"
+        }
+        
+        isLoading = false
+    }
 } 
