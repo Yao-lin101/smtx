@@ -44,6 +44,12 @@ class TemplateStorage {
         template.status = TemplateStatus.local.rawValue
         template.version = "1.0"
         
+        // Set cloud sync status
+        template.cloudUid = nil
+        template.cloudVersion = nil
+        template.cloudStatus = CloudStatus.local.rawValue
+        template.lastSyncedAt = nil
+        
         // Set template data
         template.title = title
         template.language = language
@@ -215,6 +221,23 @@ class TemplateStorage {
         print("- Tags: \(tags)")
         print("- Timeline items: \(timelineItems.count)")
         
+        // 更新版本号
+        if let currentVersion = template.version {
+            let versionComponents = currentVersion.split(separator: ".")
+            if versionComponents.count == 2,
+               let major = Int(versionComponents[0]),
+               let minor = Int(versionComponents[1]) {
+                // 增加小版本号
+                template.version = "\(major).\(minor + 1)"
+            } else {
+                // 如果版本号格式不正确，重置为1.0
+                template.version = "1.0"
+            }
+        } else {
+            // 如果没有版本号，设置为1.0
+            template.version = "1.0"
+        }
+        
         // 更新基本信息
         template.title = title
         template.updatedAt = Date()
@@ -244,12 +267,36 @@ class TemplateStorage {
             item.template = template
         }
         
+        // 如果模板已发布到云端，标记为已修改
+        if template.cloudStatus == CloudStatus.published.rawValue {
+            template.cloudStatus = CloudStatus.modified.rawValue
+        }
+        
         try context.save()
         print("✅ Template updated successfully")
+        print("- New version: \(template.version ?? "1.0")")
+        print("- Cloud status: \(template.cloudStatus ?? CloudStatus.local.rawValue)")
+        
+        NotificationCenter.default.post(name: .templateDidUpdate, object: nil)
     }
     
     func getTemplateTags(_ template: Template) -> [String] {
         return (template.tags as? [String]) ?? []
+    }
+    
+    // 添加云端同步相关方法
+    func updateCloudStatus(templateId: String, cloudUid: String, cloudVersion: String) throws {
+        let template = try loadTemplate(templateId: templateId)
+        
+        template.cloudUid = cloudUid
+        template.cloudVersion = cloudVersion
+        template.cloudStatus = CloudStatus.published.rawValue
+        template.lastSyncedAt = Date()
+        
+        try context.save()
+        print("✅ Template cloud status updated")
+        print("- Cloud UID: \(cloudUid)")
+        print("- Cloud version: \(cloudVersion)")
     }
 }
 
@@ -274,4 +321,10 @@ enum TemplateStatus: String {
     case local
     case synced
     case modified
+}
+
+enum CloudStatus: String {
+    case local      // 未发布到云端
+    case published  // 已发布到云端
+    case modified   // 已发布但本地有修改
 } 

@@ -10,6 +10,12 @@
         <attribute name="status" attributeType="String"/>
         <attribute name="version" attributeType="String" defaultValueString="1.0"/>
         
+        <!-- Cloud Sync -->
+        <attribute name="cloudUid" optional="YES" attributeType="String"/>
+        <attribute name="cloudVersion" optional="YES" attributeType="String"/>
+        <attribute name="cloudStatus" attributeType="String" defaultValueString="local"/>
+        <attribute name="lastSyncedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        
         <!-- Template Data -->
         <attribute name="title" attributeType="String"/>
         <attribute name="language" attributeType="String"/>

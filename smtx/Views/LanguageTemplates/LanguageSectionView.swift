@@ -18,6 +18,8 @@ struct LanguageSectionView: View {
     @Environment(\.userStore) private var userStore
     @State private var templateToPublish: Template?
     @State private var showingPublishSheet = false
+    @State private var lastUpdateTime = Date()
+    private let debounceInterval: TimeInterval = 0.5
     
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)
@@ -88,7 +90,11 @@ struct LanguageSectionView: View {
             loadTemplates()
         }
         .onReceive(NotificationCenter.default.publisher(for: .templateDidUpdate)) { _ in
-            loadTemplates()
+            let now = Date()
+            if now.timeIntervalSince(lastUpdateTime) >= debounceInterval {
+                loadTemplates()
+                lastUpdateTime = now
+            }
         }
         .sheet(item: $templateToPublish) { template in
             PublishTemplateView(template: template)
@@ -189,9 +195,12 @@ struct LanguageSectionView: View {
     private func loadTemplates() {
         do {
             let allTemplates = try TemplateStorage.shared.listTemplatesByLanguage()
-            templates = allTemplates[language] ?? []
-            refreshTrigger = UUID()
-            print("✅ Loaded \(templates.count) templates for language: \(language)")
+            let newTemplates = allTemplates[language] ?? []
+            if templates != newTemplates {
+                templates = newTemplates
+                refreshTrigger = UUID()
+                print("✅ Loaded \(templates.count) templates for language: \(language)")
+            }
         } catch {
             print("❌ Failed to load templates: \(error)")
         }
