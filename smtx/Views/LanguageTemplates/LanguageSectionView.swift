@@ -15,6 +15,9 @@ struct LanguageSectionView: View {
     @State private var showingDeleteAlert = false
     @State private var templateToDelete: Template?
     @State private var searchText = ""
+    @Environment(\.userStore) private var userStore
+    @State private var templateToPublish: Template?
+    @State private var showingPublishSheet = false
     
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)
@@ -87,6 +90,11 @@ struct LanguageSectionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .templateDidUpdate)) { _ in
             loadTemplates()
         }
+        .sheet(isPresented: $showingPublishSheet) {
+            if let template = templateToPublish {
+                PublishTemplateView(template: template)
+            }
+        }
     }
     
     private var galleryView: some View {
@@ -130,6 +138,16 @@ struct LanguageSectionView: View {
                         Label("编辑", systemImage: "pencil")
                     }
                     .tint(.blue)
+                    
+                    if userStore.isAuthenticated {
+                        Button {
+                            templateToPublish = template
+                            showingPublishSheet = true
+                        } label: {
+                            Label("发布", systemImage: "square.and.arrow.up")
+                        }
+                        .tint(.orange)
+                    }
                 }
             }
         }
@@ -140,6 +158,15 @@ struct LanguageSectionView: View {
     
     private func templateContextMenu(for template: Template) -> some View {
         Group {
+            if userStore.isAuthenticated {
+                Button {
+                    templateToPublish = template
+                    showingPublishSheet = true
+                } label: {
+                    Label("发布", systemImage: "square.and.arrow.up")
+                }
+            }
+            
             Button {
                 router.navigate(to: .createTemplate(language, template.id))
             } label: {
