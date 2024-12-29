@@ -39,94 +39,30 @@ enum AuthError: LocalizedError {
 class AuthService {
     static let shared = AuthService()
     private let apiConfig = APIConfig.shared
-    private let session: URLSession
+    private let networkService = NetworkService.shared
     
-    private init() {
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 30    // 请求超时时间
-        configuration.timeoutIntervalForResource = 300  // 资源超时时间
-        configuration.waitsForConnectivity = true      // 等待网络连接
-        
-        self.session = URLSession(configuration: configuration)
-    }
-    
-    private func makeRequest(_ path: String, method: String, body: Encodable? = nil, queryItems: [URLQueryItem]? = nil) -> URLRequest {
-        var urlComponents = URLComponents(string: apiConfig.baseURL)!
-        
-        // 确保路径以斜杠开始
-        var normalizedPath = path
-        if !normalizedPath.hasPrefix("/") {
-            normalizedPath = "/" + normalizedPath
-        }
-        // 确保路径以斜杠结束
-        if !normalizedPath.hasSuffix("/") {
-            normalizedPath += "/"
-        }
-        
-        urlComponents.path += normalizedPath
-        urlComponents.queryItems = queryItems
-        
-        guard let url = urlComponents.url else {
-            fatalError("Invalid URL: \(apiConfig.baseURL)\(normalizedPath)")
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 只有非 GET 请求才设置请求体
-        if method != "GET", let body = body {
-            let encoder = JSONEncoder()
-            request.httpBody = try? encoder.encode(body)
-        }
-        
-        // 使用 TokenManager 获取 token
-        if let token = TokenManager.shared.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        return request
-    }
+    private init() {}
     
     func sendVerificationCode(email: String) async throws {
-        let request = makeRequest(
-            "users/send_verify_code/",
-            method: "POST",
-            body: ["email": email]
-        )
-        
-        let (data, response) = try await session.data(for: request)
-        
-        #if DEBUG
-        if let json = try? JSONSerialization.jsonObject(with: data, options: []) {
-            print("Response:", json)
-        }
-        #endif
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("无效的响应")
-        }
-        
-        if httpResponse.statusCode == 400 {
-            if let errorResponse = try? JSONDecoder().decode([String: [String]].self, from: data),
-               let firstError = errorResponse.first?.value.first {
-                throw AuthError.serverError(firstError)
-            }
-            
-            // 尝试解析简单的错误消息
-            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
-               let errorMessage = errorResponse["error"] {
-                if errorMessage.contains("已被注册") {
+        do {
+            let _: EmptyBody = try await networkService.post(
+                apiConfig.verifyCodeURL,
+                body: ["email": email]
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                if message.contains("已被注册") {
                     throw AuthError.emailExists
                 }
-                throw AuthError.serverError(errorMessage)
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.unauthorized
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            default:
+                throw AuthError.serverError(error.localizedDescription)
             }
-            
-            throw AuthError.serverError("发送验证码失败")
-        }
-        
-        if httpResponse.statusCode != 200 {
-            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
         }
     }
     
@@ -137,56 +73,39 @@ class AuthService {
             verify_code: code
         )
         
-        let request = makeRequest(
-            "users/register_email/",
-            method: "POST",
-            body: body
-        )
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("无效的响应")
-        }
-        
-        if httpResponse.statusCode == 400 {
-            if let errorResponse = try? JSONDecoder().decode([String: [String]].self, from: data),
-               let firstError = errorResponse.first?.value.first {
-                throw AuthError.serverError(firstError)
-            }
-            
-            // 尝试解析简单的错误消息
-            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
-               let errorMessage = errorResponse["error"] {
-                throw AuthError.serverError(errorMessage)
-            }
-            
-            throw AuthError.serverError("注册失败")
-        }
-        
-        if httpResponse.statusCode != 201 {
-            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
-        }
-        
         do {
-            let decoder = JSONDecoder()
-            return try decoder.decode(RegisterResponse.self, from: data)
-        } catch {
-            if let decodingError = error as? DecodingError {
-                switch decodingError {
-                case .keyNotFound(let key, _):
-                    throw AuthError.serverError("缺少字段：\(key.stringValue)")
-                case .typeMismatch(_, let context):
-                    throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                case .valueNotFound(_, let context):
-                    throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                case .dataCorrupted(let context):
-                    throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
-                @unknown default:
-                    throw AuthError.serverError("未知解码错误")
+            return try await networkService.post(
+                apiConfig.registerURL,
+                body: body,
+                requiresAuth: false
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.unauthorized
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            case .decodingError(let error):
+                if let decodingError = error as? DecodingError {
+                    switch decodingError {
+                    case .keyNotFound(let key, _):
+                        throw AuthError.serverError("缺少字段：\(key.stringValue)")
+                    case .typeMismatch(_, let context):
+                        throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    case .valueNotFound(_, let context):
+                        throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    case .dataCorrupted(let context):
+                        throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
+                    @unknown default:
+                        throw AuthError.serverError("未知解码错误")
+                    }
                 }
+                throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
+            default:
+                throw AuthError.serverError(error.localizedDescription)
             }
-            throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
         }
     }
     
@@ -196,162 +115,90 @@ class AuthService {
             password: password
         )
         
-        let request = makeRequest(
-            "auth/token/",
-            method: "POST",
-            body: body
-        )
-        
-        let (data, response) = try await session.data(for: request)
-        
-        #if DEBUG
-        if let json = try? JSONSerialization.jsonObject(with: data, options: []) {
-            print("Login Response:", json)
-        }
-        #endif
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("无效的响应")
-        }
-        
-        if httpResponse.statusCode == 400 {
-            if let errorResponse = try? JSONDecoder().decode([String: [String]].self, from: data),
-               let firstError = errorResponse.first?.value.first {
-                throw AuthError.serverError(firstError)
-            }
-            
-            // 尝试解析简单的错误消息
-            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
-               let errorMessage = errorResponse["error"] {
-                if errorMessage.contains("密码错误") {
+        do {
+            return try await networkService.post(
+                apiConfig.loginURL,
+                body: body,
+                requiresAuth: false
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                if message.contains("密码错误") {
                     throw AuthError.invalidPassword
                 }
-                throw AuthError.serverError(errorMessage)
-            }
-            
-            throw AuthError.serverError("登录失败")
-        }
-        
-        if httpResponse.statusCode != 200 {
-            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
-        }
-        
-        do {
-            let decoder = JSONDecoder()
-            return try decoder.decode(LoginResponse.self, from: data)
-        } catch {
-            if let decodingError = error as? DecodingError {
-                switch decodingError {
-                case .keyNotFound(let key, _):
-                    throw AuthError.serverError("缺少字段：\(key.stringValue)")
-                case .typeMismatch(_, let context):
-                    throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                case .valueNotFound(_, let context):
-                    throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                case .dataCorrupted(let context):
-                    throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
-                @unknown default:
-                    throw AuthError.serverError("未知解码错误")
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.unauthorized
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            case .decodingError(let error):
+                if let decodingError = error as? DecodingError {
+                    switch decodingError {
+                    case .keyNotFound(let key, _):
+                        throw AuthError.serverError("缺少字段：\(key.stringValue)")
+                    case .typeMismatch(_, let context):
+                        throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    case .valueNotFound(_, let context):
+                        throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                    case .dataCorrupted(let context):
+                        throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
+                    @unknown default:
+                        throw AuthError.serverError("未知解码错误")
+                    }
                 }
+                throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
+            default:
+                throw AuthError.serverError(error.localizedDescription)
             }
-            throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
         }
     }
     
     func uploadAvatar(_ image: UIImage) async throws -> User {
-        // 将图片转换为 JPEG 数据
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             throw AuthError.serverError("图片处理失败")
         }
         
-        // 创建 multipart/form-data 请求
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: URL(string: apiConfig.uploadAvatarURL)!)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证头
-        if let token = TokenManager.shared.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        // 构建请求体
-        var body = Data()
-        
-        // 添加文件数据
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        body.append(imageData)
-        body.append("\r\n".data(using: .utf8)!)
-        
-        // 结束标记
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        
-        request.httpBody = body
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("无效的响应")
-        }
-        
-        if httpResponse.statusCode == 401 {
-            throw AuthError.serverError("请重新登录")
-        }
-        
-        if httpResponse.statusCode != 200 {
-            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
-               let errorMessage = errorResponse["error"] {
-                throw AuthError.serverError(errorMessage)
+        do {
+            return try await networkService.uploadMultipartFormData(
+                url: apiConfig.uploadAvatarURL,
+                data: imageData,
+                name: "avatar",
+                filename: "avatar.jpg",
+                mimeType: "image/jpeg"
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.serverError("请重新登录")
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            default:
+                throw AuthError.serverError(error.localizedDescription)
             }
-            throw AuthError.serverError("上传失败：\(httpResponse.statusCode)")
         }
-        
-        let decoder = JSONDecoder()
-        return try decoder.decode(User.self, from: data)
     }
     
     func updateProfile(_ data: [String: Any]) async throws -> User {
-        guard let token = TokenManager.shared.accessToken else {
-            throw AuthError.unauthorized
-        }
-        
-        var request = URLRequest(url: URL(string: apiConfig.profileURL)!)
-        request.httpMethod = "PUT"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        let jsonData = try JSONSerialization.data(withJSONObject: data)
-        request.httpBody = jsonData
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("Invalid response")
-        }
-        
-        if httpResponse.statusCode == 400 {
-            if let errorResponse = try? JSONDecoder().decode([String: [String]].self, from: data) {
-                if let usernameErrors = errorResponse["username"] {
-                    throw AuthError.serverError(usernameErrors[0])
-                }
-                if let firstError = errorResponse.first?.value.first {
-                    throw AuthError.serverError(firstError)
-                }
+        do {
+            return try await networkService.putDictionary(
+                apiConfig.profileURL,
+                body: data
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.unauthorized
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            default:
+                throw AuthError.serverError(error.localizedDescription)
             }
-            throw AuthError.serverError("更新失败")
         }
-        
-        if httpResponse.statusCode == 401 {
-            throw AuthError.unauthorized
-        }
-        
-        if httpResponse.statusCode != 200 {
-            throw AuthError.serverError("更新失败：\(httpResponse.statusCode)")
-        }
-        
-        return try JSONDecoder().decode(User.self, from: data)
     }
     
     // MARK: - User Management
@@ -362,93 +209,64 @@ class AuthService {
             queryItems.append(URLQueryItem(name: "search", value: search))
         }
         
-        let request = makeRequest(
-            "/users/",
-            method: "GET",
-            queryItems: queryItems
-        )
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("无效的响应")
-        }
-        
-        if httpResponse.statusCode == 401 {
-            throw AuthError.unauthorized
-        }
-        
-        if httpResponse.statusCode != 200 {
-            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
-        }
+        let urlString = apiConfig.usersURL + "?" + queryItems.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
         
         do {
-            let decoder = JSONDecoder()
-            return try decoder.decode(PaginatedResponse<User>.self, from: data)
-        } catch {
-            print("Decoding Error:", error)
-            throw AuthError.decodingError
+            return try await networkService.get(urlString)
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.unauthorized
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw AuthError.decodingError
+            default:
+                throw AuthError.serverError(error.localizedDescription)
+            }
         }
     }
     
     func toggleUserBan(uid: String) async throws -> String {
-        let request = makeRequest(
-            "/users/\(uid)/ban/",
-            method: "POST",
-            body: EmptyBody()
-        )
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("无效的响应")
-        }
-        
-        if httpResponse.statusCode == 401 {
-            throw AuthError.unauthorized
-        }
-        
-        if httpResponse.statusCode == 404 {
-            throw AuthError.serverError("用户不存在")
-        }
-        
-        if httpResponse.statusCode != 200 {
-            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
-        }
-        
         do {
-            let response = try JSONDecoder().decode([String: String].self, from: data)
+            let response: [String: String] = try await networkService.post(
+                apiConfig.banUserURL(uid: uid),
+                body: EmptyBody()
+            )
             return response["message"] ?? "操作成功"
-        } catch {
-            throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.unauthorized
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            default:
+                throw AuthError.serverError(error.localizedDescription)
+            }
         }
     }
     
     func fetchUserCount() async throws -> Int {
-        let request = makeRequest(
-            "/users/count/",
-            method: "GET"
-        )
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AuthError.networkError("无效的响应")
-        }
-        
-        if httpResponse.statusCode == 401 {
-            throw AuthError.unauthorized
-        }
-        
-        if httpResponse.statusCode != 200 {
-            throw AuthError.serverError("状态码：\(httpResponse.statusCode)")
-        }
-        
         do {
-            let response = try JSONDecoder().decode([String: Int].self, from: data)
+            let response: [String: Int] = try await networkService.get(apiConfig.userCountURL)
             return response["total"] ?? 0
-        } catch {
-            throw AuthError.decodingError
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw AuthError.serverError(message)
+            case .unauthorized:
+                throw AuthError.unauthorized
+            case .networkError(let error):
+                throw AuthError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw AuthError.decodingError
+            default:
+                throw AuthError.serverError(error.localizedDescription)
+            }
         }
     }
 }
