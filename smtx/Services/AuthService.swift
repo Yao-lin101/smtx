@@ -38,13 +38,7 @@ enum AuthError: LocalizedError {
 
 class AuthService {
     static let shared = AuthService()
-    
-    #if DEBUG
-    let baseURL = "http://192.168.1.102:8000/api/v1"  // 使用服务器的局域网 IP
-    #else
-    let baseURL = "https://api.example.com/api/v1"  // 生产环境（待配置）
-    #endif
-    
+    private let apiConfig = APIConfig.shared
     private let session: URLSession
     
     private init() {
@@ -57,7 +51,7 @@ class AuthService {
     }
     
     private func makeRequest(_ path: String, method: String, body: Encodable? = nil, queryItems: [URLQueryItem]? = nil) -> URLRequest {
-        var urlComponents = URLComponents(string: baseURL)!
+        var urlComponents = URLComponents(string: apiConfig.baseURL)!
         
         // 确保路径以斜杠开始
         var normalizedPath = path
@@ -73,7 +67,7 @@ class AuthService {
         urlComponents.queryItems = queryItems
         
         guard let url = urlComponents.url else {
-            fatalError("Invalid URL: \(baseURL)\(normalizedPath)")
+            fatalError("Invalid URL: \(apiConfig.baseURL)\(normalizedPath)")
         }
         
         var request = URLRequest(url: url)
@@ -272,7 +266,7 @@ class AuthService {
         
         // 创建 multipart/form-data 请求
         let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: URL(string: "\(baseURL)/users/upload_avatar/")!)
+        var request = URLRequest(url: URL(string: apiConfig.uploadAvatarURL)!)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         
@@ -323,8 +317,7 @@ class AuthService {
             throw AuthError.unauthorized
         }
         
-        let url = URL(string: "\(baseURL)/users/profile/")!
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: URL(string: apiConfig.profileURL)!)
         request.httpMethod = "PUT"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

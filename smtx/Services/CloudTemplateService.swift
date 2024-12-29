@@ -12,21 +12,15 @@ enum CloudTemplateError: Error {
 
 class CloudTemplateService {
     static let shared = CloudTemplateService()
-    
-    #if DEBUG
-    private let baseURL = "http://192.168.1.102:8000/api/v1"  // 使用服务器的局域网 IP
-    #else
-    private let baseURL = "https://api.example.com/api/v1"  // 生产环境（待配置）
-    #endif
-    
     private let tokenManager = TokenManager.shared
+    private let apiConfig = APIConfig.shared
     
     private init() {}
     
     // MARK: - Language Sections
     
     func fetchLanguageSections() async throws -> [LanguageSection] {
-        guard let url = URL(string: "\(baseURL)/language-sections/") else {
+        guard let url = URL(string: apiConfig.languageSectionsURL) else {
             throw CloudTemplateError.invalidURL
         }
         
@@ -85,7 +79,7 @@ class CloudTemplateService {
     }
     
     func createLanguageSection(name: String, chineseName: String = "") async throws -> LanguageSection {
-        guard let url = URL(string: "\(baseURL)/language-sections/") else {
+        guard let url = URL(string: apiConfig.languageSectionsURL) else {
             throw CloudTemplateError.invalidURL
         }
         
@@ -132,7 +126,7 @@ class CloudTemplateService {
     }
     
     func deleteLanguageSection(uid: String) async throws {
-        guard let url = URL(string: "\(baseURL)/language-sections/\(uid)/") else {
+        guard let url = URL(string: apiConfig.languageSectionURL(uid: uid)) else {
             throw CloudTemplateError.invalidURL
         }
         
@@ -173,7 +167,7 @@ class CloudTemplateService {
     // MARK: - Language Section Subscription
     
     func subscribeLanguageSection(uid: String) async throws -> Bool {
-        guard let url = URL(string: "\(baseURL)/language-sections/\(uid)/subscribe/") else {
+        guard let url = URL(string: apiConfig.languageSectionSubscribeURL(uid: uid)) else {
             throw CloudTemplateError.invalidURL
         }
         
@@ -217,7 +211,7 @@ class CloudTemplateService {
     // MARK: - Cloud Templates
     
     func fetchTemplate(uid: String) async throws -> CloudTemplate {
-        guard let url = URL(string: "\(baseURL)/templates/\(uid)/") else {
+        guard let url = URL(string: "\(apiConfig.baseURL)/templates/\(uid)/") else {
             throw CloudTemplateError.invalidURL
         }
         
@@ -257,7 +251,7 @@ class CloudTemplateService {
     }
     
     func fetchTemplates(languageSection: String? = nil, tag: String? = nil, authorUid: String? = nil) async throws -> [CloudTemplate] {
-        var urlComponents = URLComponents(string: "\(baseURL)/templates/")
+        var urlComponents = URLComponents(string: "\(apiConfig.baseURL)/templates/")
         var queryItems: [URLQueryItem] = []
         
         if let languageSection = languageSection {
@@ -315,7 +309,7 @@ class CloudTemplateService {
     }
     
     func likeTemplate(uid: String) async throws -> Bool {
-        guard let url = URL(string: "\(baseURL)/templates/\(uid)/like/") else {
+        guard let url = URL(string: "\(apiConfig.baseURL)/templates/\(uid)/like/") else {
             throw CloudTemplateError.invalidURL
         }
         
@@ -357,7 +351,7 @@ class CloudTemplateService {
     }
     
     func collectTemplate(uid: String) async throws -> Bool {
-        guard let url = URL(string: "\(baseURL)/templates/\(uid)/collect/") else {
+        guard let url = URL(string: "\(apiConfig.baseURL)/templates/\(uid)/collect/") else {
             throw CloudTemplateError.invalidURL
         }
         
@@ -399,7 +393,7 @@ class CloudTemplateService {
     }
     
     func updateLanguageSection(uid: String, name: String, chineseName: String = "") async throws -> LanguageSection {
-        guard let url = URL(string: "\(baseURL)/language-sections/\(uid)/") else {
+        guard let url = URL(string: apiConfig.languageSectionURL(uid: uid)) else {
             throw CloudTemplateError.invalidURL
         }
         

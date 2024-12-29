@@ -13,6 +13,9 @@ class UserStore: ObservableObject {
         return _shared!
     }
     
+    private let authService = AuthService.shared
+    private let apiConfig = APIConfig.shared
+    
     @Published private(set) var currentUser: User?
     @Published private(set) var isAuthenticated = false
     @Published private(set) var isLoading = false
@@ -87,8 +90,7 @@ class UserStore: ObservableObject {
     
     // 验证 token - 只在应用启动时调用
     private func validateToken(_ token: String) async throws {
-        let url = URL(string: "\(AuthService.shared.baseURL)/users/profile/")!
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: URL(string: apiConfig.profileURL)!)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -164,5 +166,5 @@ struct RequireAuth<Content: View>: View {
                 }
             }
         }
-    } 
+    }
 }
