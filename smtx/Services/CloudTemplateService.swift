@@ -14,428 +14,247 @@ class CloudTemplateService {
     static let shared = CloudTemplateService()
     private let tokenManager = TokenManager.shared
     private let apiConfig = APIConfig.shared
+    private let networkService = NetworkService.shared
     
     private init() {}
     
     // MARK: - Language Sections
     
     func fetchLanguageSections() async throws -> [LanguageSection] {
-        guard let url = URL(string: apiConfig.languageSectionsURL) else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            print("🔐 Using token: \(token)")
-        } else {
-            print("⚠️ No token available")
-        }
-        
-        print("📡 Fetching language sections from: \(url)")
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            print("📥 Response status code: \(httpResponse.statusCode)")
-            
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("📦 Response data: \(responseString)")
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                let result = try DateDecoder.decoder.decode(PaginatedResponse<LanguageSection>.self, from: data)
-                print("✅ Successfully decoded \(result.results.count) language sections")
-                return result.results
-            case 401:
-                print("❌ Unauthorized")
+            let response: PaginatedResponse<LanguageSection> = try await networkService.get(
+                apiConfig.languageSectionsURL,
+                decoder: DateDecoder.decoder
+            )
+            return response.results
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                print("❌ Client error: \(httpResponse.statusCode)")
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                print("❌ Server error: \(httpResponse.statusCode)")
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
+            case .decodingError(let error):
+                throw CloudTemplateError.decodingError(error)
             default:
-                print("❌ Unknown error: \(httpResponse.statusCode)")
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            print("❌ CloudTemplateError: \(error)")
-            throw error
-        } catch {
-            print("❌ Network error: \(error)")
-            throw CloudTemplateError.networkError(error)
         }
     }
     
     func createLanguageSection(name: String, chineseName: String = "") async throws -> LanguageSection {
-        guard let url = URL(string: apiConfig.languageSectionsURL) else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        // 准备请求体
         let body = [
             "name": name,
             "chinese_name": chineseName
         ]
-        request.httpBody = try JSONEncoder().encode(body)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 201:
-                return try DateDecoder.decoder.decode(LanguageSection.self, from: data)
-            case 401:
+            return try await networkService.postDictionary(
+                apiConfig.languageSectionsURL,
+                body: body,
+                decoder: DateDecoder.decoder
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
+            case .decodingError(let error):
+                throw CloudTemplateError.decodingError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
         }
     }
     
     func deleteLanguageSection(uid: String) async throws {
-        guard let url = URL(string: apiConfig.languageSectionURL(uid: uid)) else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 204:
-                return
-            case 401:
+            try await networkService.deleteNoContent(apiConfig.languageSectionURL(uid: uid))
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
         }
     }
     
     // MARK: - Language Section Subscription
     
     func subscribeLanguageSection(uid: String) async throws -> Bool {
-        guard let url = URL(string: apiConfig.languageSectionSubscribeURL(uid: uid)) else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                let decoder = JSONDecoder()
-                let result = try decoder.decode([String: String].self, from: data)
-                return result["status"] == "subscribed"
-            case 401:
+            let response: [String: String] = try await networkService.post(
+                apiConfig.languageSectionSubscribeURL(uid: uid),
+                body: EmptyBody()
+            )
+            return response["status"] == "subscribed"
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
         }
     }
     
     // MARK: - Cloud Templates
     
     func fetchTemplate(uid: String) async throws -> CloudTemplate {
-        guard let url = URL(string: "\(apiConfig.baseURL)/templates/\(uid)/") else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                return try DateDecoder.decoder.decode(CloudTemplate.self, from: data)
-            case 401:
+            return try await networkService.get(
+                apiConfig.templateURL(uid: uid),
+                decoder: DateDecoder.decoder
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
+            case .decodingError(let error):
+                throw CloudTemplateError.decodingError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
         }
     }
     
-    func fetchTemplates(languageSection: String? = nil, tag: String? = nil, authorUid: String? = nil) async throws -> [CloudTemplate] {
-        var urlComponents = URLComponents(string: "\(apiConfig.baseURL)/templates/")
-        var queryItems: [URLQueryItem] = []
-        
+    func fetchTemplates(languageSection: String? = nil, search: String? = nil, page: Int = 1) async throws -> [CloudTemplate] {
+        var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
         if let languageSection = languageSection {
             queryItems.append(URLQueryItem(name: "language_section", value: languageSection))
         }
-        if let tag = tag {
-            queryItems.append(URLQueryItem(name: "tag", value: tag))
-        }
-        if let authorUid = authorUid {
-            queryItems.append(URLQueryItem(name: "author_uid", value: authorUid))
+        if let search = search {
+            queryItems.append(URLQueryItem(name: "search", value: search))
         }
         
-        if !queryItems.isEmpty {
-            urlComponents?.queryItems = queryItems
-        }
-        
-        guard let url = urlComponents?.url else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        let urlString = apiConfig.templatesURL + "?" + queryItems.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                let result = try DateDecoder.decoder.decode(PaginatedResponse<CloudTemplate>.self, from: data)
-                return result.results
-            case 401:
+            let response: PaginatedResponse<CloudTemplate> = try await networkService.get(
+                urlString,
+                decoder: DateDecoder.decoder
+            )
+            return response.results
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
+            case .decodingError(let error):
+                throw CloudTemplateError.decodingError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
         }
     }
     
     func likeTemplate(uid: String) async throws -> Bool {
-        guard let url = URL(string: "\(apiConfig.baseURL)/templates/\(uid)/like/") else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                let decoder = JSONDecoder()
-                let result = try decoder.decode([String: String].self, from: data)
-                return result["status"] == "liked"
-            case 401:
+            let response: [String: String] = try await networkService.post(
+                apiConfig.templateLikeURL(uid: uid),
+                body: EmptyBody()
+            )
+            return response["status"] == "liked"
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
         }
     }
     
     func collectTemplate(uid: String) async throws -> Bool {
-        guard let url = URL(string: "\(apiConfig.baseURL)/templates/\(uid)/collect/") else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                let decoder = JSONDecoder()
-                let result = try decoder.decode([String: String].self, from: data)
-                return result["status"] == "collected"
-            case 401:
+            let response: [String: String] = try await networkService.post(
+                apiConfig.templateCollectURL(uid: uid),
+                body: EmptyBody()
+            )
+            return response["status"] == "collected"
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
+        }
+    }
+    
+    func incrementTemplateUsage(uid: String) async throws {
+        do {
+            let _: EmptyBody = try await networkService.post(
+                apiConfig.templateUsageURL(uid: uid),
+                body: EmptyBody()
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
+                throw CloudTemplateError.unauthorized
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
+            default:
+                throw CloudTemplateError.unknown
+            }
         }
     }
     
     func updateLanguageSection(uid: String, name: String, chineseName: String = "") async throws -> LanguageSection {
-        guard let url = URL(string: apiConfig.languageSectionURL(uid: uid)) else {
-            throw CloudTemplateError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 添加认证token
-        if let token = tokenManager.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        // 准备请求体
         let body = [
             "name": name,
             "chinese_name": chineseName
         ]
-        request.httpBody = try JSONEncoder().encode(body)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw CloudTemplateError.invalidResponse
-            }
-            
-            switch httpResponse.statusCode {
-            case 200:
-                return try DateDecoder.decoder.decode(LanguageSection.self, from: data)
-            case 401:
+            return try await networkService.patchDictionary(
+                apiConfig.languageSectionURL(uid: uid),
+                body: body,
+                decoder: DateDecoder.decoder
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw CloudTemplateError.serverError(message)
+            case .unauthorized:
                 throw CloudTemplateError.unauthorized
-            case 400...499:
-                throw CloudTemplateError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw CloudTemplateError.serverError("Server error: \(httpResponse.statusCode)")
+            case .networkError(let error):
+                throw CloudTemplateError.networkError(error)
+            case .decodingError(let error):
+                throw CloudTemplateError.decodingError(error)
             default:
                 throw CloudTemplateError.unknown
             }
-        } catch let error as CloudTemplateError {
-            throw error
-        } catch {
-            throw CloudTemplateError.networkError(error)
         }
     }
 }

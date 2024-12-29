@@ -19,32 +19,37 @@ class NetworkService {
     
     // MARK: - Generic Request Methods
     
-    func get<T: Decodable>(_ url: String, requiresAuth: Bool = true) async throws -> T {
+    func get<T: Decodable>(_ url: String, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
         let request = try createRequest(url: url, method: "GET", requiresAuth: requiresAuth)
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
     }
     
-    func post<T: Decodable, B: Encodable>(_ url: String, body: B, requiresAuth: Bool = true) async throws -> T {
+    func post<T: Decodable, B: Encodable>(_ url: String, body: B, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
         var request = try createRequest(url: url, method: "POST", requiresAuth: requiresAuth)
         request.httpBody = try JSONEncoder().encode(body)
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
     }
     
-    func put<T: Decodable, B: Encodable>(_ url: String, body: B, requiresAuth: Bool = true) async throws -> T {
+    func put<T: Decodable, B: Encodable>(_ url: String, body: B, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
         var request = try createRequest(url: url, method: "PUT", requiresAuth: requiresAuth)
         request.httpBody = try JSONEncoder().encode(body)
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
     }
     
-    func patch<T: Decodable, B: Encodable>(_ url: String, body: B, requiresAuth: Bool = true) async throws -> T {
+    func patch<T: Decodable, B: Encodable>(_ url: String, body: B, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
         var request = try createRequest(url: url, method: "PATCH", requiresAuth: requiresAuth)
         request.httpBody = try JSONEncoder().encode(body)
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
     }
     
-    func delete<T: Decodable>(_ url: String, requiresAuth: Bool = true) async throws -> T {
+    func delete<T: Decodable>(_ url: String, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
         let request = try createRequest(url: url, method: "DELETE", requiresAuth: requiresAuth)
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
+    }
+    
+    func deleteNoContent(_ url: String, requiresAuth: Bool = true) async throws {
+        let request = try createRequest(url: url, method: "DELETE", requiresAuth: requiresAuth)
+        try await performRequestNoContent(request)
     }
     
     // MARK: - Helper Methods
@@ -68,21 +73,54 @@ class NetworkService {
         return request
     }
     
+    private func performRequestNoContent(_ request: URLRequest) async throws {
+        do {
+            let (_, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NetworkError.invalidResponse
+            }
+            
+            switch httpResponse.statusCode {
+            case 200...299:
+                return
+            case 401:
+                throw NetworkError.unauthorized
+            case 400...499:
+                throw NetworkError.serverError("Client error: \(httpResponse.statusCode)")
+            case 500...599:
+                throw NetworkError.serverError("Server error: \(httpResponse.statusCode)")
+            default:
+                throw NetworkError.unknown
+            }
+        } catch let error as NetworkError {
+            throw error
+        } catch {
+            throw NetworkError.networkError(error)
+        }
+    }
+    
     // MARK: - Dictionary Request Methods
     
-    func putDictionary<T: Decodable>(_ url: String, body: [String: Any], requiresAuth: Bool = true) async throws -> T {
+    func putDictionary<T: Decodable>(_ url: String, body: [String: Any], decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
         var request = try createRequest(url: url, method: "PUT", requiresAuth: requiresAuth)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
     }
     
-    func postDictionary<T: Decodable>(_ url: String, body: [String: Any], requiresAuth: Bool = true) async throws -> T {
+    func postDictionary<T: Decodable>(_ url: String, body: [String: Any], decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
         var request = try createRequest(url: url, method: "POST", requiresAuth: requiresAuth)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
     }
     
-    private func performRequest<T: Decodable>(_ request: URLRequest) async throws -> T {
+    func patchDictionary<T: Decodable>(_ url: String, body: [String: Any], decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
+        var request = try createRequest(url: url, method: "PATCH", requiresAuth: requiresAuth)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await performRequest(request, decoder: decoder)
+    }
+    
+    private func performRequest<T: Decodable>(_ request: URLRequest, decoder: JSONDecoder = JSONDecoder()) async throws -> T {
         do {
             let (data, response) = try await session.data(for: request)
             
@@ -93,7 +131,7 @@ class NetworkService {
             switch httpResponse.statusCode {
             case 200...299:
                 do {
-                    return try JSONDecoder().decode(T.self, from: data)
+                    return try decoder.decode(T.self, from: data)
                 } catch {
                     throw NetworkError.decodingError(error)
                 }
