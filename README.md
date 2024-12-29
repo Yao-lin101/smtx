@@ -2,175 +2,62 @@
 
 SMTX 是一个专为语言学习者设计的 iOS 应用，帮助用户创建、管理和练习语言学习模板。
 
-## 功能特点
-
-### 用户系统
-- 邮箱注册和登录
-- 个人资料管理
-  - 头像上传与预览
-  - 昵称修改
-  - 个人简介编辑
-- 用户认证
-  - JWT Token 认证
-  - Token 自动刷新
-  - 本地持久化
-
-### 模板管理
-- 按语言分类管理模板
-- 支持创建和删除语言分区
-- 可自定义模板封面、标题和标签
-- 提供编辑和删除功能
-
-### 时间轴编辑
-- 创建带有时间点的学习内容
-- 支持文字脚本和图片内容
-- 灵活的时长设置
-- 实时预览时间轴
-
-### 录音练习
-- 根据模板内容进行录音练习
-- 实时显示录音波形
-- 录音完成自动进入预览模式
-- 支持录音回放和删除
-- 15秒快进/快退功能
-- 流畅的动画过渡效果
-
-## 技术特点
-
-- 基于 SwiftUI 构建的原生 iOS 应用
-- 使用 CoreData 进行数据持久化
-- 集成 AVFoundation 处理音频录制和播放
-- 响应式界面设计
-- JWT Token 认证
-- 图片缓存管理
-- 优化的性能和内存管理
-
 ## 系统要求
 
 - iOS 16.0 或更高版本
 - Xcode 15.0 或更高版本（用于开发）
+- Swift 5.9 或更高版本
 
-## 项目结构
+## 快速开始
 
-```
-smtx/
-├── Views/                 # 视图相关文件
-│   ├── MainTabView       # 主标签视图
-│   ├── Profile          # 个人中心相关视图
-│   ├── LanguageSection   # 语言分区视图
-│   ├── TemplateDetail    # 模板详情视图
-│   ├── Recording        # 录音和预览视图
-│   └── Components       # 可复用组件
-├── Services/            # 服务层
-│   ├── AuthService     # 认证服务
-│   └── ImageCacheManager # 图片缓存管理
-├── Store/              # 状态管理
-│   ├── UserStore      # 用户状态管理
-│   └── TokenManager   # Token 管理
-├── Navigation/         # 导航相关
-│   └── NavigationRouter # 导航路由管理
-├── Storage/           # 数据存储
-│   └── TemplateStorage # 模板存储管理
-└── Model/            # 数据模型
-    └── CoreData      # CoreData 模型定义
+1. 克隆项目
+```bash
+git clone https://github.com/your-org/smtx.git
+cd smtx/ios/smtx
 ```
 
-### 主要组件
+2. 安装依赖
+```bash
+pod install
+```
 
-#### 视图层
-- `MainTabView`: 应用主界面，管理标签页导航
-- `ProfileView`: 个人中心，用户信息展示和管理
-- `LocalTemplatesView`: 本地模板列表，支持语言分区管理
-- `LanguageSectionView`: 语言分区详情，显示该语言下的所有模板
-- `TemplateDetailView`: 模板详情页，管理录音记录
-- `RecordingView`: 录音和预览界面，支持录音和回放功能
+3. 打开项目
+```bash
+open smtx.xcworkspace
+```
 
-#### 服务层
-- `AuthService`: 处理用户认证相关请求
-- `ImageCacheManager`: 管理图片缓存，优化加载性能
+## 核心功能
 
-#### 状态管理
-- `UserStore`: 管理用户状态和信息
-- `TokenManager`: 管理认证 Token
+- 用户认证与个人资料管理
+- 语言分区管理
+- 模板创建与编辑
+- 录音练习
+- 云端同步
 
-#### 数据层
-- `TemplateStorage`: 管理模板和录音数据的存储
-- `CoreData Model`: 定义数据结构和关系
-  - Template: 模板实体
-  - TimelineItem: 时间轴项目
-  - Record: 录音记录
+## 文档
 
-#### 导航系统
+详细的开发文档请查看 [docs](./docs) 目录：
 
-- 路由管理
-  - `Route`: 定义所有可能的导航路径
-    - 模板相关: languageSection, templateDetail, createTemplate, recording
-    - 个人中心: profile, profileDetail, settings, help, about, avatarPreview, emailRegister
+- [项目概述](./docs/overview.md)
+- [架构设计](./docs/architecture/)
+  - [用户系统](./docs/architecture/auth.md)
+  - [语言分区](./docs/architecture/language-section.md)
+  - [模板系统](./docs/architecture/template.md)
+  - [录音系统](./docs/architecture/recording.md)
+  - [网络架构](./docs/architecture/network.md)
+- [API 文档](./docs/api/)
+  - [API 概览](./docs/api/overview.md)
+  - [认证 API](./docs/api/auth.md)
+  - [模板 API](./docs/api/template.md)
+- [开发指南](./docs/guides/)
+  - [代码风格](./docs/guides/code-style.md)
+  - [测试指南](./docs/guides/testing.md)
+  - [发布流程](./docs/guides/release.md)
 
-- 导航路由器
-  - `NavigationRouter`: 为每个主要页面提供独立的导航状态管理
-    - `cloudRouter`: 云模板页面的导航
-    - `localRouter`: 本地模板页面的导航
-    - `profileRouter`: 个人中心页面的导航
+## 贡献
 
-- 导航方式
-  - `TabView`: 顶层页面切换（云模板、本地模板、个人中心）
-  - `NavigationStack`: 页面层级导航，每个主要页面独立管理
-  - `.sheet`: 模态视图（如登录、注册、图片裁剪等临时性操作）
-
-- 导航特点
-  - 独立的导航状态：每个主要页面有自己的导航堆栈
-  - 类型安全：使用枚举定义所有可能的路由
-  - 状态持久化：保持页面导航状态
-  - 深层导航：支持多级页面导航
-  - 模态展示：支持临时性操作的模态展示
-
-- 使用示例
-  ```swift
-  // 定义路由
-  case createTemplate(String, String?)
-  
-  // 导航到新页面
-  router.navigate(to: .createTemplate(language, templateId))
-  
-  // 处理导航
-  .navigationDestination(for: Route.self) { route in
-      switch route {
-      case .createTemplate(let language, let templateId):
-          CreateTemplateView(language: language, existingTemplateId: templateId)
-      // ...
-      }
-  }
-  ```
-
-## 开发计划
-
-### 即将推出的功能
-- [ ] 微信登录集成
-- [ ] 云端模板同步
-- [ ] 练习数据统计
-- [ ] 模板分享功能
-
-### 待优化项目
-- [ ] 数据备份功能
-- [ ] 批量操作支持
-- [ ] 更多录音编辑功能
-- [ ] 网络请求优化
-- [ ] 离线支持
-
-## 文件格式与导出
-
-### 当前格式
-- 图片文件：JPEG 格式
-- 音频文件：M4A 格式 (AAC 编码)
-- 用户头像：JPEG 格式，支持裁剪和预览
-
-### 计划支持的功能
-1. 音频格式转换
-2. 图片格式转换
-3. 批量处理
-4. 分享功能
+如果你想为项目做出贡献，请查看我们的[贡献指南](./docs/contributing.md)。
 
 ## 许可证
 
-[待定]
+本项目采用 MIT 许可证 - 查看 [LICENSE](./LICENSE) 文件了解详情。
