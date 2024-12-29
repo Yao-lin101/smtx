@@ -37,11 +37,11 @@ class CloudTemplateViewModel: ObservableObject {
             
             languageSections = sections
             print("✅ Loaded \(languageSections.count) language sections")
-        } catch CloudTemplateError.unauthorized {
+        } catch TemplateError.unauthorized {
             print("❌ Unauthorized error")
             errorMessage = "请先登录"
             showError = true
-        } catch CloudTemplateError.serverError(let message) {
+        } catch TemplateError.serverError(let message) {
             print("❌ Server error: \(message)")
             errorMessage = message
             showError = true
@@ -118,10 +118,10 @@ class CloudTemplateViewModel: ObservableObject {
             templates = try await service.fetchTemplates(
                 languageSection: languageSection
             )
-        } catch CloudTemplateError.unauthorized {
+        } catch TemplateError.unauthorized {
             errorMessage = "请先登录"
             showError = true
-        } catch CloudTemplateError.serverError(let message) {
+        } catch TemplateError.serverError(let message) {
             errorMessage = message
             showError = true
         } catch {
@@ -147,10 +147,10 @@ class CloudTemplateViewModel: ObservableObject {
                     // 保存到本地存储
                     saveLocalSubscribedSections()
                 }
-            } catch CloudTemplateError.unauthorized {
+            } catch TemplateError.unauthorized {
                 errorMessage = "请先登录"
                 showError = true
-            } catch CloudTemplateError.serverError(let message) {
+            } catch TemplateError.serverError(let message) {
                 errorMessage = message
                 showError = true
             } catch {
@@ -172,10 +172,10 @@ class CloudTemplateViewModel: ObservableObject {
             do {
                 let template = try await service.fetchTemplate(uid: uid)
                 templates = [template]
-            } catch CloudTemplateError.unauthorized {
+            } catch TemplateError.unauthorized {
                 errorMessage = "请先登录"
                 showError = true
-            } catch CloudTemplateError.serverError(let message) {
+            } catch TemplateError.serverError(let message) {
                 errorMessage = message
                 showError = true
             } catch {

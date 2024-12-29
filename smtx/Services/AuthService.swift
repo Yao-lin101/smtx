@@ -1,41 +1,6 @@
 import Foundation
 import UIKit
 
-enum AuthError: LocalizedError {
-    case invalidEmail
-    case invalidPassword
-    case invalidCode
-    case emailExists
-    case networkError(String)
-    case serverError(String)
-    case unauthorized
-    case usernameExists
-    case decodingError
-    
-    var errorDescription: String? {
-        switch self {
-        case .invalidEmail:
-            return "邮箱格式不正确"
-        case .invalidPassword:
-            return "密码格式不正确"
-        case .invalidCode:
-            return "验证码不正确"
-        case .emailExists:
-            return "该邮箱已被注册"
-        case .networkError(let message):
-            return "网络错误：\(message)"
-        case .serverError(let message):
-            return "服务器错误：\(message)"
-        case .unauthorized:
-            return "未授权"
-        case .usernameExists:
-            return "该昵称已被使用"
-        case .decodingError:
-            return "数据解析失败"
-        }
-    }
-}
-
 class AuthService {
     static let shared = AuthService()
     private let apiConfig = APIConfig.shared
@@ -82,27 +47,20 @@ class AuthService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
+                if message.contains("验证码错误") {
+                    throw AuthError.invalidCode
+                } else if message.contains("邮箱格式") {
+                    throw AuthError.invalidEmail
+                } else if message.contains("密码格式") {
+                    throw AuthError.invalidPassword
+                }
                 throw AuthError.serverError(message)
             case .unauthorized:
                 throw AuthError.unauthorized
             case .networkError(let error):
                 throw AuthError.networkError(error.localizedDescription)
-            case .decodingError(let error):
-                if let decodingError = error as? DecodingError {
-                    switch decodingError {
-                    case .keyNotFound(let key, _):
-                        throw AuthError.serverError("缺少字段：\(key.stringValue)")
-                    case .typeMismatch(_, let context):
-                        throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                    case .valueNotFound(_, let context):
-                        throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                    case .dataCorrupted(let context):
-                        throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
-                    @unknown default:
-                        throw AuthError.serverError("未知解码错误")
-                    }
-                }
-                throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
+            case .decodingError:
+                throw AuthError.decodingError
             default:
                 throw AuthError.serverError(error.localizedDescription)
             }
@@ -126,28 +84,16 @@ class AuthService {
             case .serverError(let message):
                 if message.contains("密码错误") {
                     throw AuthError.invalidPassword
+                } else if message.contains("邮箱格式") {
+                    throw AuthError.invalidEmail
                 }
                 throw AuthError.serverError(message)
             case .unauthorized:
                 throw AuthError.unauthorized
             case .networkError(let error):
                 throw AuthError.networkError(error.localizedDescription)
-            case .decodingError(let error):
-                if let decodingError = error as? DecodingError {
-                    switch decodingError {
-                    case .keyNotFound(let key, _):
-                        throw AuthError.serverError("缺少字段：\(key.stringValue)")
-                    case .typeMismatch(_, let context):
-                        throw AuthError.serverError("字段类型不匹配：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                    case .valueNotFound(_, let context):
-                        throw AuthError.serverError("字段为空：\(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-                    case .dataCorrupted(let context):
-                        throw AuthError.serverError("数据格式错误：\(context.debugDescription)")
-                    @unknown default:
-                        throw AuthError.serverError("未知解码错误")
-                    }
-                }
-                throw AuthError.serverError("数据解析失败：\(error.localizedDescription)")
+            case .decodingError:
+                throw AuthError.decodingError
             default:
                 throw AuthError.serverError(error.localizedDescription)
             }
@@ -172,9 +118,11 @@ class AuthService {
             case .serverError(let message):
                 throw AuthError.serverError(message)
             case .unauthorized:
-                throw AuthError.serverError("请重新登录")
+                throw AuthError.unauthorized
             case .networkError(let error):
                 throw AuthError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw AuthError.decodingError
             default:
                 throw AuthError.serverError(error.localizedDescription)
             }
@@ -190,11 +138,16 @@ class AuthService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
+                if message.contains("昵称已被使用") {
+                    throw AuthError.usernameExists
+                }
                 throw AuthError.serverError(message)
             case .unauthorized:
                 throw AuthError.unauthorized
             case .networkError(let error):
                 throw AuthError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw AuthError.decodingError
             default:
                 throw AuthError.serverError(error.localizedDescription)
             }

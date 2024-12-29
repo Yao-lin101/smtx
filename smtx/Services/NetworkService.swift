@@ -1,15 +1,5 @@
 import Foundation
 
-enum NetworkError: Error {
-    case invalidURL
-    case invalidResponse
-    case networkError(Error)
-    case decodingError(Error)
-    case serverError(String)
-    case unauthorized
-    case unknown
-}
-
 class NetworkService {
     static let shared = NetworkService()
     private let session = URLSession.shared

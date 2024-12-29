@@ -24,10 +24,10 @@ class AdminViewModel: ObservableObject {
         
         do {
             languageSections = try await service.fetchLanguageSections()
-        } catch CloudTemplateError.unauthorized {
+        } catch TemplateError.unauthorized {
             errorMessage = "请先登录"
             showError = true
-        } catch CloudTemplateError.serverError(let message) {
+        } catch TemplateError.serverError(let message) {
             errorMessage = message
             showError = true
         } catch {
@@ -49,11 +49,11 @@ class AdminViewModel: ObservableObject {
             print("✅ 语言分区创建成功: \(section.name)")
             // 创建成功后重新加载列表
             await loadLanguageSections()
-        } catch CloudTemplateError.unauthorized {
+        } catch TemplateError.unauthorized {
             print("❌ 未授权错误")
             errorMessage = "请先登录"
             showError = true
-        } catch CloudTemplateError.serverError(let message) {
+        } catch TemplateError.serverError(let message) {
             print("❌ 服务器错误: \(message)")
             errorMessage = message
             showError = true
@@ -74,10 +74,10 @@ class AdminViewModel: ObservableObject {
             try await service.deleteLanguageSection(uid: uid)
             // 删除成功后重新加载列表
             await loadLanguageSections()
-        } catch CloudTemplateError.unauthorized {
+        } catch TemplateError.unauthorized {
             errorMessage = "请先登录"
             showError = true
-        } catch CloudTemplateError.serverError(let message) {
+        } catch TemplateError.serverError(let message) {
             errorMessage = message
             showError = true
         } catch {
@@ -97,7 +97,7 @@ class AdminViewModel: ObservableObject {
             _ = try await service.updateLanguageSection(uid: uid, name: name, chineseName: chineseName)
             // 更新成功后重新加载列表
             await loadLanguageSections()
-        } catch let error as CloudTemplateError {
+        } catch let error as TemplateError {
             showError = true
             errorMessage = error.localizedDescription
         } catch {

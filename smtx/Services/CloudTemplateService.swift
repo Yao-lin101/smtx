@@ -1,15 +1,5 @@
 import Foundation
 
-enum CloudTemplateError: Error {
-    case invalidURL
-    case networkError(Error)
-    case decodingError(Error)
-    case invalidResponse
-    case serverError(String)
-    case unauthorized
-    case unknown
-}
-
 class CloudTemplateService {
     static let shared = CloudTemplateService()
     private let tokenManager = TokenManager.shared
@@ -30,15 +20,15 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
-            case .decodingError(let error):
-                throw CloudTemplateError.decodingError(error)
+                throw TemplateError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw TemplateError.decodingError
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("获取语言分区失败")
             }
         }
     }
@@ -58,15 +48,15 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
-            case .decodingError(let error):
-                throw CloudTemplateError.decodingError(error)
+                throw TemplateError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw TemplateError.decodingError
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("创建语言分区失败")
             }
         }
     }
@@ -77,13 +67,41 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
+                throw TemplateError.networkError(error.localizedDescription)
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("删除语言分区失败")
+            }
+        }
+    }
+    
+    func updateLanguageSection(uid: String, name: String, chineseName: String = "") async throws -> LanguageSection {
+        let body = [
+            "name": name,
+            "chinese_name": chineseName
+        ]
+        
+        do {
+            return try await networkService.patchDictionary(
+                apiConfig.languageSectionURL(uid: uid),
+                body: body,
+                decoder: DateDecoder.decoder
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw TemplateError.serverError(message)
+            case .unauthorized:
+                throw TemplateError.unauthorized
+            case .networkError(let error):
+                throw TemplateError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw TemplateError.decodingError
+            default:
+                throw TemplateError.operationFailed("更新语言分区失败")
             }
         }
     }
@@ -100,13 +118,13 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
+                throw TemplateError.networkError(error.localizedDescription)
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("订阅语言分区失败")
             }
         }
     }
@@ -122,15 +140,15 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
-            case .decodingError(let error):
-                throw CloudTemplateError.decodingError(error)
+                throw TemplateError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw TemplateError.decodingError
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.templateNotFound
             }
         }
     }
@@ -155,15 +173,15 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
-            case .decodingError(let error):
-                throw CloudTemplateError.decodingError(error)
+                throw TemplateError.networkError(error.localizedDescription)
+            case .decodingError:
+                throw TemplateError.decodingError
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("获取模板列表失败")
             }
         }
     }
@@ -178,13 +196,13 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
+                throw TemplateError.networkError(error.localizedDescription)
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("点赞失败")
             }
         }
     }
@@ -199,13 +217,13 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
+                throw TemplateError.networkError(error.localizedDescription)
             default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("收藏失败")
             }
         }
     }
@@ -219,41 +237,13 @@ class CloudTemplateService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
+                throw TemplateError.serverError(message)
             case .unauthorized:
-                throw CloudTemplateError.unauthorized
+                throw TemplateError.unauthorized
             case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
+                throw TemplateError.networkError(error.localizedDescription)
             default:
-                throw CloudTemplateError.unknown
-            }
-        }
-    }
-    
-    func updateLanguageSection(uid: String, name: String, chineseName: String = "") async throws -> LanguageSection {
-        let body = [
-            "name": name,
-            "chinese_name": chineseName
-        ]
-        
-        do {
-            return try await networkService.patchDictionary(
-                apiConfig.languageSectionURL(uid: uid),
-                body: body,
-                decoder: DateDecoder.decoder
-            )
-        } catch let error as NetworkError {
-            switch error {
-            case .serverError(let message):
-                throw CloudTemplateError.serverError(message)
-            case .unauthorized:
-                throw CloudTemplateError.unauthorized
-            case .networkError(let error):
-                throw CloudTemplateError.networkError(error)
-            case .decodingError(let error):
-                throw CloudTemplateError.decodingError(error)
-            default:
-                throw CloudTemplateError.unknown
+                throw TemplateError.operationFailed("更新使用次数失败")
             }
         }
     }
