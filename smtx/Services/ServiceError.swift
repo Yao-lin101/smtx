@@ -38,6 +38,7 @@ enum AuthError: LocalizedError {
     case invalidPassword
     case invalidCode
     case emailExists
+    case loginFailed
     case networkError(String)
     case serverError(String)
     case unauthorized
@@ -56,6 +57,8 @@ enum AuthError: LocalizedError {
             return "验证码不正确"
         case .emailExists:
             return "该邮箱已被注册"
+        case .loginFailed:
+            return "账号或密码错误"
         case .networkError(let message):
             return "网络错误：\(message)"
         case .serverError(let message):

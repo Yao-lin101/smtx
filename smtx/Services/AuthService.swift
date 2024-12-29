@@ -82,12 +82,16 @@ class AuthService {
         } catch let error as NetworkError {
             switch error {
             case .serverError(let message):
-                if message.contains("密码错误") {
+                switch message {
+                case let msg where msg.contains("账号或密码错误"):
+                    throw AuthError.loginFailed
+                case let msg where msg.contains("密码格式"):
                     throw AuthError.invalidPassword
-                } else if message.contains("邮箱格式") {
+                case let msg where msg.contains("邮箱格式"):
                     throw AuthError.invalidEmail
+                default:
+                    throw AuthError.serverError(message)
                 }
-                throw AuthError.serverError(message)
             case .unauthorized:
                 throw AuthError.unauthorized
             case .networkError(let error):

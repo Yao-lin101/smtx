@@ -38,10 +38,14 @@ class ErrorInterceptor: ResponseInterceptor {
         case 401:
             throw NetworkError.unauthorized
         case 400...499:
-            if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
-               let errorMessage = errorResponse["error"] {
+            if let errorResponse = try? JSONDecoder().decode([String: [String]].self, from: data),
+               let firstError = errorResponse["error"]?.first {
+                throw NetworkError.serverError(firstError)
+            } else if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
+               let errorMessage = errorResponse["detail"] ?? errorResponse["error"] {
                 throw NetworkError.serverError(errorMessage)
             }
+            
             throw NetworkError.serverError("Client error: \(response.statusCode)")
         case 500...599:
             throw NetworkError.serverError("Server error: \(response.statusCode)")
