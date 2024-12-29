@@ -2,11 +2,6 @@
 
 SMTX 是一个专为语言学习者设计的 iOS 应用，帮助用户创建、管理和练习语言学习模板。本文档将帮助你快速了解项目结构并开始开发。
 
-## 快速开始
-
-- [开发环境配置](./getting-started/setup.md)
-- [项目结构](./getting-started/project-structure.md)
-- [编码规范](./getting-started/coding-guidelines.md)
 
 ## 技术栈
 
@@ -69,11 +64,3 @@ SMTX 是一个专为语言学习者设计的 iOS 应用，帮助用户创建、�
 - [SwiftUI 官方文档](https://developer.apple.com/documentation/swiftui)
 - [CoreData 官方文档](https://developer.apple.com/documentation/coredata)
 - [Combine 官方文档](https://developer.apple.com/documentation/combine)
-
-## 贡献指南
-
-如果你想为项目做出贡献，请查看我们的[贡献指南](./contributing.md)。
-
-## 常见问题
-
-常见问题和解决方案请查看 [FAQ](./faq.md)。

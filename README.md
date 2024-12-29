@@ -50,6 +50,7 @@ open smtx.xcworkspace
   - [认证 API](./docs/api/auth.md)
   - [模板 API](./docs/api/template.md)
 - [开发指南](./docs/guides/)
+  - [项目结构](./docs/guides/project-structure.md)
   - [代码风格](./docs/guides/code-style.md)
   - [测试指南](./docs/guides/testing.md)
   - [发布流程](./docs/guides/release.md)
