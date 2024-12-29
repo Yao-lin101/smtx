@@ -90,10 +90,8 @@ struct LanguageSectionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .templateDidUpdate)) { _ in
             loadTemplates()
         }
-        .sheet(isPresented: $showingPublishSheet) {
-            if let template = templateToPublish {
-                PublishTemplateView(template: template)
-            }
+        .sheet(item: $templateToPublish) { template in
+            PublishTemplateView(template: template)
         }
     }
     
