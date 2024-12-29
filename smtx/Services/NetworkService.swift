@@ -14,47 +14,48 @@ class NetworkService {
     static let shared = NetworkService()
     private let session = URLSession.shared
     private let tokenManager = TokenManager.shared
+    private let interceptorManager = NetworkInterceptorManager.shared
     
     private init() {}
     
     // MARK: - Generic Request Methods
     
     func get<T: Decodable>(_ url: String, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        let request = try createRequest(url: url, method: "GET", requiresAuth: requiresAuth)
+        let request = try await createRequest(url: url, method: "GET", requiresAuth: requiresAuth)
         return try await performRequest(request, decoder: decoder)
     }
     
     func post<T: Decodable, B: Encodable>(_ url: String, body: B, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        var request = try createRequest(url: url, method: "POST", requiresAuth: requiresAuth)
+        var request = try await createRequest(url: url, method: "POST", requiresAuth: requiresAuth)
         request.httpBody = try JSONEncoder().encode(body)
         return try await performRequest(request, decoder: decoder)
     }
     
     func put<T: Decodable, B: Encodable>(_ url: String, body: B, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        var request = try createRequest(url: url, method: "PUT", requiresAuth: requiresAuth)
+        var request = try await createRequest(url: url, method: "PUT", requiresAuth: requiresAuth)
         request.httpBody = try JSONEncoder().encode(body)
         return try await performRequest(request, decoder: decoder)
     }
     
     func patch<T: Decodable, B: Encodable>(_ url: String, body: B, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        var request = try createRequest(url: url, method: "PATCH", requiresAuth: requiresAuth)
+        var request = try await createRequest(url: url, method: "PATCH", requiresAuth: requiresAuth)
         request.httpBody = try JSONEncoder().encode(body)
         return try await performRequest(request, decoder: decoder)
     }
     
     func delete<T: Decodable>(_ url: String, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        let request = try createRequest(url: url, method: "DELETE", requiresAuth: requiresAuth)
+        let request = try await createRequest(url: url, method: "DELETE", requiresAuth: requiresAuth)
         return try await performRequest(request, decoder: decoder)
     }
     
     func deleteNoContent(_ url: String, requiresAuth: Bool = true) async throws {
-        let request = try createRequest(url: url, method: "DELETE", requiresAuth: requiresAuth)
+        let request = try await createRequest(url: url, method: "DELETE", requiresAuth: requiresAuth)
         try await performRequestNoContent(request)
     }
     
     // MARK: - Helper Methods
     
-    private func createRequest(url: String, method: String, requiresAuth: Bool) throws -> URLRequest {
+    private func createRequest(url: String, method: String, requiresAuth: Bool) async throws -> URLRequest {
         guard let url = URL(string: url) else {
             throw NetworkError.invalidURL
         }
@@ -64,10 +65,7 @@ class NetworkService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         if requiresAuth {
-            guard let token = tokenManager.accessToken else {
-                throw NetworkError.unauthorized
-            }
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request = try await interceptorManager.adaptRequest(request)
         }
         
         return request
@@ -75,24 +73,13 @@ class NetworkService {
     
     private func performRequestNoContent(_ request: URLRequest) async throws {
         do {
-            let (_, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.invalidResponse
             }
             
-            switch httpResponse.statusCode {
-            case 200...299:
-                return
-            case 401:
-                throw NetworkError.unauthorized
-            case 400...499:
-                throw NetworkError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw NetworkError.serverError("Server error: \(httpResponse.statusCode)")
-            default:
-                throw NetworkError.unknown
-            }
+            try await interceptorManager.processResponse(httpResponse, data: data)
         } catch let error as NetworkError {
             throw error
         } catch {
@@ -103,19 +90,19 @@ class NetworkService {
     // MARK: - Dictionary Request Methods
     
     func putDictionary<T: Decodable>(_ url: String, body: [String: Any], decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        var request = try createRequest(url: url, method: "PUT", requiresAuth: requiresAuth)
+        var request = try await createRequest(url: url, method: "PUT", requiresAuth: requiresAuth)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await performRequest(request, decoder: decoder)
     }
     
     func postDictionary<T: Decodable>(_ url: String, body: [String: Any], decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        var request = try createRequest(url: url, method: "POST", requiresAuth: requiresAuth)
+        var request = try await createRequest(url: url, method: "POST", requiresAuth: requiresAuth)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await performRequest(request, decoder: decoder)
     }
     
     func patchDictionary<T: Decodable>(_ url: String, body: [String: Any], decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        var request = try createRequest(url: url, method: "PATCH", requiresAuth: requiresAuth)
+        var request = try await createRequest(url: url, method: "PATCH", requiresAuth: requiresAuth)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await performRequest(request, decoder: decoder)
     }
@@ -128,25 +115,12 @@ class NetworkService {
                 throw NetworkError.invalidResponse
             }
             
-            switch httpResponse.statusCode {
-            case 200...299:
-                do {
-                    return try decoder.decode(T.self, from: data)
-                } catch {
-                    throw NetworkError.decodingError(error)
-                }
-            case 401:
-                throw NetworkError.unauthorized
-            case 400...499:
-                if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
-                   let errorMessage = errorResponse["error"] {
-                    throw NetworkError.serverError(errorMessage)
-                }
-                throw NetworkError.serverError("Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw NetworkError.serverError("Server error: \(httpResponse.statusCode)")
-            default:
-                throw NetworkError.unknown
+            try await interceptorManager.processResponse(httpResponse, data: data)
+            
+            do {
+                return try decoder.decode(T.self, from: data)
+            } catch {
+                throw NetworkError.decodingError(error)
             }
         } catch let error as NetworkError {
             throw error
@@ -162,10 +136,11 @@ class NetworkService {
         data: Data,
         name: String,
         filename: String,
-        mimeType: String
+        mimeType: String,
+        decoder: JSONDecoder = JSONDecoder()
     ) async throws -> T {
         let boundary = "Boundary-\(UUID().uuidString)"
-        var request = try createRequest(url: url, method: "POST", requiresAuth: true)
+        var request = try await createRequest(url: url, method: "POST", requiresAuth: true)
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         
         var body = Data()
@@ -182,6 +157,6 @@ class NetworkService {
         
         request.httpBody = body
         
-        return try await performRequest(request)
+        return try await performRequest(request, decoder: decoder)
     }
 } 
