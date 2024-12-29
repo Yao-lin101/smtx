@@ -40,9 +40,9 @@ class AuthService {
     static let shared = AuthService()
     
     #if DEBUG
-    let baseURL = "http://192.168.1.102:8000/api"  // 使用服务器的局域网 IP
+    let baseURL = "http://192.168.1.102:8000/api/v1"  // 使用服务器的局域网 IP
     #else
-    let baseURL = "https://api.example.com/api"  // 生产环境（待配置）
+    let baseURL = "https://api.example.com/api/v1"  // 生产环境（待配置）
     #endif
     
     private let session: URLSession
@@ -203,7 +203,7 @@ class AuthService {
         )
         
         let request = makeRequest(
-            "users/token/",
+            "auth/token/",
             method: "POST",
             body: body
         )

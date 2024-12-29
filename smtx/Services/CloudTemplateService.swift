@@ -14,9 +14,9 @@ class CloudTemplateService {
     static let shared = CloudTemplateService()
     
     #if DEBUG
-    private let baseURL = "http://192.168.1.102:8000/api"  // 使用服务器的局域网 IP
+    private let baseURL = "http://192.168.1.102:8000/api/v1"  // 使用服务器的局域网 IP
     #else
-    private let baseURL = "https://api.example.com/api"  // 生产环境（待配置）
+    private let baseURL = "https://api.example.com/api/v1"  // 生产环境（待配置）
     #endif
     
     private let tokenManager = TokenManager.shared
