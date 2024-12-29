@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AdminLanguageSectionsView: View {
-    @StateObject private var viewModel = AdminViewModel()
+    @StateObject private var store = LanguageSectionStore.shared
     @State private var showingCreateSheet = false
     @State private var showingEditSheet = false
     @State private var newSectionName = ""
@@ -13,9 +13,9 @@ struct AdminLanguageSectionsView: View {
     
     var filteredSections: [LanguageSection] {
         if searchText.isEmpty {
-            return viewModel.languageSections
+            return store.sections
         }
-        return viewModel.languageSections.filter { section in
+        return store.sections.filter { section in
             section.name.localizedCaseInsensitiveContains(searchText) ||
             section.chineseName.localizedCaseInsensitiveContains(searchText)
         }
@@ -93,19 +93,19 @@ struct AdminLanguageSectionsView: View {
                         Button("创建") {
                             if !newSectionName.isEmpty {
                                 Task {
-                                    await viewModel.createLanguageSection(
+                                    await store.createLanguageSection(
                                         name: newSectionName,
                                         chineseName: newSectionChineseName
                                     )
                                     
-                                    if !viewModel.showError {
-                                        await viewModel.loadLanguageSections()
+                                    if !store.showError {
+                                        await store.loadSections()
                                         newSectionName = ""
                                         newSectionChineseName = ""
                                         showingCreateSheet = false
                                         ToastManager.shared.show("创建成功")
                                     } else {
-                                        ToastManager.shared.show(viewModel.errorMessage ?? "创建失败", type: .error)
+                                        ToastManager.shared.show(store.errorMessage ?? "创建失败", type: .error)
                                     }
                                 }
                             }
@@ -136,18 +136,18 @@ struct AdminLanguageSectionsView: View {
                         Button("保存") {
                             if !newSectionName.isEmpty, let section = sectionToEdit {
                                 Task {
-                                    await viewModel.updateLanguageSection(
+                                    await store.updateLanguageSection(
                                         uid: section.uid,
                                         name: newSectionName,
                                         chineseName: newSectionChineseName
                                     )
                                     
-                                    if !viewModel.showError {
-                                        await viewModel.loadLanguageSections()
+                                    if !store.showError {
+                                        await store.loadSections()
                                         showingEditSheet = false
                                         ToastManager.shared.show("更新成功")
                                     } else {
-                                        ToastManager.shared.show(viewModel.errorMessage ?? "更新失败", type: .error)
+                                        ToastManager.shared.show(store.errorMessage ?? "更新失败", type: .error)
                                     }
                                 }
                             }
@@ -163,12 +163,12 @@ struct AdminLanguageSectionsView: View {
             Button("删除", role: .destructive) {
                 if let section = sectionToDelete {
                     Task {
-                        await viewModel.deleteLanguageSection(uid: section.uid)
-                        if !viewModel.showError {
-                            await viewModel.loadLanguageSections()
+                        await store.deleteLanguageSection(uid: section.uid)
+                        if !store.showError {
+                            await store.loadSections()
                             ToastManager.shared.show("删除成功")
                         } else {
-                            ToastManager.shared.show(viewModel.errorMessage ?? "删除失败", type: .error)
+                            ToastManager.shared.show(store.errorMessage ?? "删除失败", type: .error)
                         }
                     }
                 }
@@ -181,11 +181,11 @@ struct AdminLanguageSectionsView: View {
         .toastManager()
         .onAppear {
             Task {
-                await viewModel.loadLanguageSections()
+                await store.loadSections()
             }
         }
         .overlay {
-            if viewModel.isLoading {
+            if store.isLoading {
                 ProgressView()
             }
         }

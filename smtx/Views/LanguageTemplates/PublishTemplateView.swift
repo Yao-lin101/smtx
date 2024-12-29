@@ -2,16 +2,16 @@ import SwiftUI
 
 struct PublishTemplateView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel = PublishTemplateViewModel()
+    @StateObject private var store = LanguageSectionStore.shared
     let template: Template
     @State private var searchText = ""
     @State private var selectedSection: LanguageSection?
     
     private var filteredSections: [LanguageSection] {
         if searchText.isEmpty {
-            return viewModel.languageSections
+            return store.sections
         }
-        return viewModel.languageSections.filter { section in
+        return store.sections.filter { section in
             section.name.localizedCaseInsensitiveContains(searchText) ||
             section.chineseName.localizedCaseInsensitiveContains(searchText)
         }
@@ -67,42 +67,18 @@ struct PublishTemplateView: View {
                 }
             }
             .task {
-                await viewModel.loadLanguageSections()
+                await store.loadSections()
             }
             .overlay {
-                if viewModel.isLoading {
+                if store.isLoading {
                     ProgressView()
                 }
             }
-            .alert("错误", isPresented: $viewModel.showError) {
+            .alert("错误", isPresented: $store.showError) {
                 Button("确定", role: .cancel) { }
             } message: {
-                Text(viewModel.errorMessage ?? "未知错误")
+                Text(store.errorMessage ?? "未知错误")
             }
         }
-    }
-}
-
-@MainActor
-class PublishTemplateViewModel: ObservableObject {
-    @Published private(set) var languageSections: [LanguageSection] = []
-    @Published private(set) var isLoading = false
-    @Published var errorMessage: String?
-    @Published var showError = false
-    
-    private let service = CloudTemplateService.shared
-    
-    func loadLanguageSections() async {
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            languageSections = try await service.fetchLanguageSections()
-        } catch {
-            errorMessage = "加载语言分区失败"
-            showError = true
-        }
-        
-        isLoading = false
     }
 } 

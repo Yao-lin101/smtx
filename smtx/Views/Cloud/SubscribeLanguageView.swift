@@ -2,13 +2,13 @@ import SwiftUI
 
 struct SubscribeLanguageView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var viewModel: CloudTemplateViewModel
+    @StateObject private var store = LanguageSectionStore.shared
     @Binding var searchText: String
     @State private var sectionToUnsubscribe: LanguageSection?
     @State private var showingUnsubscribeAlert = false
     
     private var filteredSubscribedSections: [LanguageSection] {
-        let sections = viewModel.languageSections.filter { $0.isSubscribed }
+        let sections = store.sections.filter { $0.isSubscribed }
         guard !searchText.isEmpty else { return sections }
         return sections.filter { section in
             section.name.localizedCaseInsensitiveContains(searchText) ||
@@ -17,7 +17,7 @@ struct SubscribeLanguageView: View {
     }
     
     private var filteredUnsubscribedSections: [LanguageSection] {
-        let sections = viewModel.languageSections.filter { !$0.isSubscribed }
+        let sections = store.sections.filter { !$0.isSubscribed }
         guard !searchText.isEmpty else { return sections }
         return sections.filter { section in
             section.name.localizedCaseInsensitiveContains(searchText) ||
@@ -42,7 +42,7 @@ struct SubscribeLanguageView: View {
                     sectionToUnsubscribe = section
                     showingUnsubscribeAlert = true
                 } else {
-                    viewModel.toggleSubscription(for: section)
+                    store.toggleSubscription(for: section)
                 }
             } label: {
                 Image(systemName: section.isSubscribed ? "checkmark.circle.fill" : "plus.circle")
@@ -82,13 +82,13 @@ struct SubscribeLanguageView: View {
                 }
             }
             .task {
-                await viewModel.loadLanguageSections()
+                await store.loadSections()
             }
             .alert("确认取消订阅", isPresented: $showingUnsubscribeAlert) {
                 Button("取消", role: .cancel) { }
                 Button("确定", role: .destructive) {
                     if let section = sectionToUnsubscribe {
-                        viewModel.toggleSubscription(for: section)
+                        store.toggleSubscription(for: section)
                     }
                 }
             } message: {
@@ -102,7 +102,6 @@ struct SubscribeLanguageView: View {
 
 #Preview {
     SubscribeLanguageView(
-        viewModel: CloudTemplateViewModel(),
         searchText: .constant("")
     )
 } 

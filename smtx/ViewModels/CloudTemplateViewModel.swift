@@ -232,4 +232,30 @@ class CloudTemplateViewModel: ObservableObject {
     func getLanguageSectionName(uid: String) -> String {
         languageSections.first { $0.uid == uid }?.name ?? "未知语言"
     }
+    
+    // MARK: - Filtering
+    
+    func filteredTemplates(searchText: String) -> [CloudTemplate] {
+        guard !searchText.isEmpty else {
+            return templates
+        }
+        return templates.filter { template in
+            template.title.localizedCaseInsensitiveContains(searchText) ||
+            template.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
+        }
+    }
+    
+    func filteredSections(searchText: String) -> [LanguageSection] {
+        guard !searchText.isEmpty else {
+            return languageSections
+        }
+        return languageSections.filter { section in
+            section.name.localizedCaseInsensitiveContains(searchText) ||
+            (!section.chineseName.isEmpty && section.chineseName.localizedCaseInsensitiveContains(searchText))
+        }
+    }
+    
+    func selectedLanguage(uid: String) -> LanguageSection? {
+        languageSections.first { $0.uid == uid }
+    }
 } 

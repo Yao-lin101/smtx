@@ -3,157 +3,26 @@ import SwiftUI
 struct CloudTemplatesView: View {
     @EnvironmentObject private var router: NavigationRouter
     @StateObject private var viewModel = CloudTemplateViewModel()
-    @AppStorage("selectedLanguageSection") private var selectedLanguageUid: String = ""
-    @State private var showingLanguageSelector = false
-    @State private var showingSubscribeSheet = false
+    @AppStorage("selectedLanguageUid") private var selectedLanguageUid: String = ""
     @AppStorage("cloudTemplateDisplayMode") private var displayMode: TemplateListDisplayMode = .list
+    @State private var showingSubscribeSheet = false
     @State private var searchText = ""
     
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 180), spacing: 16)
     ]
     
-    private var selectedLanguage: LanguageSection? {
-        viewModel.languageSections.first { $0.uid == selectedLanguageUid }
-    }
-    
-    private func templateMatches(_ template: CloudTemplate, searchText: String) -> Bool {
-        if template.title.localizedCaseInsensitiveContains(searchText) {
-            return true
-        }
-        return template.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
-    }
-    
-    private var filteredTemplates: [CloudTemplate] {
-        if searchText.isEmpty {
-            return viewModel.templates
-        }
-        return viewModel.templates.filter { templateMatches($0, searchText: searchText) }
-    }
-    
-    private func sectionMatches(_ section: LanguageSection, searchText: String) -> Bool {
-        if section.name.localizedCaseInsensitiveContains(searchText) {
-            return true
-        }
-        if !section.chineseName.isEmpty && section.chineseName.localizedCaseInsensitiveContains(searchText) {
-            return true
-        }
-        return false
-    }
-    
-    private var filteredSections: [LanguageSection] {
-        if searchText.isEmpty {
-            return viewModel.languageSections
-        }
-        return viewModel.languageSections.filter { sectionMatches($0, searchText: searchText) }
-    }
-    
     var body: some View {
         Group {
             VStack(spacing: 0) {
                 // 顶部工具栏
-                HStack {
-                    // 语言选择器
-                    Menu {
-                        if viewModel.subscribedSections.isEmpty {
-                            Text("无")
-                        } else {
-                            Button("全部") {
-                                selectedLanguageUid = ""
-                                Task {
-                                    await viewModel.loadTemplates()
-                                }
-                            }
-                            ForEach(viewModel.subscribedSections) { section in
-                                Button(section.name) {
-                                    selectedLanguageUid = section.uid
-                                    Task {
-                                        await viewModel.loadTemplates(languageSection: section.name)
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Text(selectedLanguage?.name ?? "全部")
-                                .font(.headline)
-                            Image(systemName: "chevron.down")
-                        }
-                        .foregroundColor(.primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(8)
-                    }
-                    
-                    Spacer()
-                    
-                    // 显示模式切换和添加订阅按钮
-                    HStack(spacing: 16) {
-                        Button(action: toggleDisplayMode) {
-                            Image(systemName: displayMode == .list ? "square.grid.2x2" : "list.bullet")
-                        }
-                        
-                        Button {
-                            showingSubscribeSheet = true
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                    }
-                }
-                .padding()
-                .background(Color(.systemGroupedBackground))
+                toolbarView
                 
                 // 搜索栏
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    
-                    TextField("搜索标题或标签", text: $searchText)
-                        .textFieldStyle(.plain)
-                    
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                .padding(8)
-                .background(Color(.systemBackground))
-                .cornerRadius(8)
-                .padding(.horizontal)
-                .padding(.bottom)
+                searchBarView
                 
-                // 模板/网格视图
-                if viewModel.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if filteredTemplates.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "doc.text.image")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        
-                        Text("暂无模板")
-                            .font(.title2)
-                            .foregroundColor(.primary)
-                        
-                        Text("当前语言分区还没有模板")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    Group {
-                        switch displayMode {
-                        case .list:
-                            listView
-                        case .gallery:
-                            galleryView
-                        }
-                    }
-                }
+                // 内容视图
+                contentView
             }
         }
         .alert("错误", isPresented: $viewModel.showError) {
@@ -162,27 +31,177 @@ struct CloudTemplatesView: View {
             Text(viewModel.errorMessage ?? "未知错误")
         }
         .sheet(isPresented: $showingSubscribeSheet) {
-            SubscribeLanguageView(viewModel: viewModel, searchText: $searchText)
+            SubscribeLanguageView(searchText: $searchText)
         }
         .onAppear {
-            // 只加载本地数据
             viewModel.loadLocalData()
         }
-        // 监听订阅状态变化
         .onChange(of: viewModel.subscribedSections) { sections in
-            if !selectedLanguageUid.isEmpty && !sections.contains(where: { $0.uid == selectedLanguageUid }) {
-                // 如果当前选中的分区被取消订阅，清除选择
-                selectedLanguageUid = ""
-                Task {
-                    await viewModel.loadTemplates()
+            handleSubscriptionChange(sections)
+        }
+    }
+    
+    // MARK: - Subviews
+    
+    private var toolbarView: some View {
+        HStack {
+            languageSelectorMenu
+            Spacer()
+            toolbarButtons
+        }
+        .padding()
+        .background(Color(.systemGroupedBackground))
+    }
+    
+    private var languageSelectorMenu: some View {
+        Menu {
+            languageSelectorContent
+        } label: {
+            HStack {
+                Text(viewModel.selectedLanguage(uid: selectedLanguageUid)?.name ?? "全部")
+                    .font(.headline)
+                Image(systemName: "chevron.down")
+            }
+            .foregroundColor(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.systemBackground))
+            .cornerRadius(8)
+        }
+    }
+    
+    private var languageSelectorContent: some View {
+        Group {
+            if viewModel.subscribedSections.isEmpty {
+                Text("无")
+            } else {
+                Button("全部") { selectLanguage("") }
+                ForEach(viewModel.subscribedSections) { section in
+                    Button(section.name) { selectLanguage(section.uid) }
                 }
+            }
+        }
+    }
+    
+    private var toolbarButtons: some View {
+        HStack(spacing: 16) {
+            Button(action: toggleDisplayMode) {
+                Image(systemName: displayMode == .list ? "square.grid.2x2" : "list.bullet")
+            }
+            
+            Button {
+                showingSubscribeSheet = true
+            } label: {
+                Image(systemName: "plus")
+            }
+        }
+    }
+    
+    private var searchBarView: some View {
+        SearchBar(text: $searchText)
+            .padding(.horizontal)
+            .padding(.bottom)
+    }
+    
+    private var contentView: some View {
+        Group {
+            if viewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if viewModel.filteredTemplates(searchText: searchText).isEmpty {
+                emptyStateView
+            } else {
+                templateListView
+            }
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func selectLanguage(_ uid: String) {
+        selectedLanguageUid = uid
+        Task {
+            if let section = viewModel.selectedLanguage(uid: uid) {
+                await viewModel.loadTemplates(languageSection: section.name)
+            } else {
+                await viewModel.loadTemplates()
+            }
+        }
+    }
+    
+    private func handleSubscriptionChange(_ sections: [LanguageSection]) {
+        if !selectedLanguageUid.isEmpty && !sections.contains(where: { $0.uid == selectedLanguageUid }) {
+            selectedLanguageUid = ""
+            Task {
+                await viewModel.loadTemplates()
+            }
+        }
+    }
+    
+    private func toggleDisplayMode() {
+        withAnimation {
+            displayMode = displayMode == .list ? .gallery : .list
+        }
+    }
+    
+    // 添加SearchBar组件
+    private struct SearchBar: View {
+        @Binding var text: String
+        
+        var body: some View {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                
+                TextField("搜索标题或标签", text: $text)
+                    .textFieldStyle(.plain)
+                
+                if !text.isEmpty {
+                    Button(action: { text = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(8)
+            .background(Color(.systemBackground))
+            .cornerRadius(8)
+        }
+    }
+    
+    // 添加空状态视图
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "doc.text.image")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            
+            Text("暂无模板")
+                .font(.title2)
+                .foregroundColor(.primary)
+            
+            Text("当前语言分区还没有模板")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    // 添加模板列表视图
+    private var templateListView: some View {
+        Group {
+            switch displayMode {
+            case .list:
+                listView
+            case .gallery:
+                galleryView
             }
         }
     }
     
     private var listView: some View {
         List {
-            ForEach(filteredTemplates) { template in
+            ForEach(viewModel.filteredTemplates(searchText: searchText)) { template in
                 NavigationLink(value: Route.cloudTemplateDetail(template.uid)) {
                     CloudTemplateRow(template: template)
                 }
@@ -199,7 +218,7 @@ struct CloudTemplatesView: View {
     private var galleryView: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(filteredTemplates) { template in
+                ForEach(viewModel.filteredTemplates(searchText: searchText)) { template in
                     NavigationLink(value: Route.cloudTemplateDetail(template.uid)) {
                         CloudTemplateCard(template: template)
                     }
@@ -211,12 +230,6 @@ struct CloudTemplatesView: View {
             Task {
                 await viewModel.loadInitialData(selectedLanguageUid: selectedLanguageUid)
             }
-        }
-    }
-    
-    private func toggleDisplayMode() {
-        withAnimation {
-            displayMode = displayMode == .list ? .gallery : .list
         }
     }
 }
@@ -328,4 +341,4 @@ struct CloudTemplateCard: View {
         .cornerRadius(12)
         .shadow(radius: 2)
     }
-} 
+}
