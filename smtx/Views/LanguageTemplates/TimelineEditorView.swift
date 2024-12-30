@@ -219,7 +219,7 @@ struct TimelineEditorView: View {
     
     private func addOrUpdateTimelineItem() {
         do {
-            let _ = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+            _ = try TemplateStorage.shared.loadTemplate(templateId: templateId)
             
             // 如果是更新现有项目
             if let index = timelineItems.firstIndex(where: { $0.timestamp == currentTime }) {
@@ -229,6 +229,7 @@ struct TimelineEditorView: View {
                    let imageData = image.jpegData(compressionQuality: 0.8) {
                     updatedItem.imageData = imageData
                 }
+                updatedItem.createdAt = Date()
                 timelineItems[index] = updatedItem
             } else {
                 // 添加新项目
@@ -240,7 +241,8 @@ struct TimelineEditorView: View {
                 let newItem = TimelineItemData(
                     script: script,
                     imageData: imageData,
-                    timestamp: currentTime
+                    timestamp: currentTime,
+                    createdAt: Date()
                 )
                 timelineItems.append(newItem)
             }

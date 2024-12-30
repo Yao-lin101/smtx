@@ -349,4 +349,94 @@ class CloudTemplateService {
             }
         }
     }
+    
+    // MARK: - Template Update
+    
+    func updateTemplate(_ template: Template, to languageSection: LanguageSection) async throws -> CloudTemplateUploadResponse {
+        guard let cloudUid = template.cloudUid,
+              let lastSyncedAt = template.lastSyncedAt else {
+            throw TemplateError.invalidTemplate
+        }
+        
+        // 1. 准备所需数据
+        guard let coverImage = template.coverImage else {
+            throw TemplateError.invalidTemplate
+        }
+        
+        // 2. 检查是否有更新
+        let timelineItems = template.timelineItems?.compactMap { $0 as? TimelineItem } ?? []
+        let hasTimelineChanges = timelineItems.contains(where: { item in
+            guard let itemDate = item.createdAt else { return true }
+            return itemDate > lastSyncedAt
+        })
+        
+        guard let templateUpdatedAt = template.updatedAt else {
+            throw TemplateError.invalidTemplate
+        }
+        let hasCoverChanges = templateUpdatedAt > lastSyncedAt
+        
+        if !hasTimelineChanges && !hasCoverChanges {
+            throw TemplateError.noChanges
+        }
+        
+        // 3. 如果封面有更新，生成缩略图
+        var coverThumbnail: Data? = nil
+        if hasCoverChanges {
+            coverThumbnail = try ImageUtils.generateThumbnail(from: coverImage)
+        }
+        
+        // 4. 如果时间轴有更新，生成时间轴数据
+        var timelineData: Data? = nil
+        var timelineImages: [Data]? = nil
+        if hasTimelineChanges {
+            let (data, images) = try TimelineUtils.generateTimelineData(
+                from: timelineItems,
+                duration: template.totalDuration
+            )
+            timelineData = data
+            timelineImages = Array(images.values)
+        }
+        
+        // 5. 创建增量更新包
+        let packageData = try TemplatePackageService.createIncrementalPackage(
+            coverImage: hasCoverChanges ? coverImage : nil,
+            coverThumbnail: coverThumbnail,
+            timeline: timelineData,
+            timelineImages: timelineImages
+        )
+        
+        // 6. 创建元数据
+        let metadataDict: [String: Any] = [
+            "cloud_uid": cloudUid,
+            "title": template.title ?? "",
+            "version": template.version ?? "1.0",
+            "duration": Int(template.totalDuration),
+            "tags": template.tags as? [String] ?? []
+        ]
+        
+        // 7. 准备上传数据
+        let formData = MultipartFormData()
+        
+        // 添加元数据
+        let metadataData = try JSONSerialization.data(withJSONObject: metadataDict)
+        formData.append(
+            metadataData,
+            withName: "metadata",
+            mimeType: "application/json"
+        )
+        
+        // 添加模板包
+        formData.append(
+            packageData,
+            withName: "media_package",
+            fileName: "template.zip",
+            mimeType: "application/zip"
+        )
+        
+        // 8. 发送请求
+        return try await networkService.uploadFormData(
+            apiConfig.updateTemplatePackageURL(uid: cloudUid),
+            formData
+        )
+    }
 }

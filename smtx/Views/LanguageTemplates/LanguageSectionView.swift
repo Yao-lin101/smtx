@@ -144,13 +144,25 @@ struct LanguageSectionView: View {
                     .tint(.blue)
                     
                     if userStore.isAuthenticated {
-                        Button {
-                            templateToPublish = template
-                            showingPublishSheet = true
-                        } label: {
-                            Label("发布", systemImage: "square.and.arrow.up")
+                        if template.cloudUid == nil {
+                            Button {
+                                templateToPublish = template
+                                showingPublishSheet = true
+                            } label: {
+                                Label("发布", systemImage: "square.and.arrow.up")
+                            }
+                            .tint(.orange)
+                        } else if let localVersion = template.version,
+                                  let cloudVersion = template.cloudVersion,
+                                  localVersion > cloudVersion {
+                            Button {
+                                templateToPublish = template
+                                showingPublishSheet = true
+                            } label: {
+                                Label("发布更新", systemImage: "square.and.arrow.up")
+                            }
+                            .tint(.orange)
                         }
-                        .tint(.orange)
                     }
                 }
             }
@@ -163,11 +175,22 @@ struct LanguageSectionView: View {
     private func templateContextMenu(for template: Template) -> some View {
         Group {
             if userStore.isAuthenticated {
-                Button {
-                    templateToPublish = template
-                    showingPublishSheet = true
-                } label: {
-                    Label("发布", systemImage: "square.and.arrow.up")
+                if template.cloudUid == nil {
+                    Button {
+                        templateToPublish = template
+                        showingPublishSheet = true
+                    } label: {
+                        Label("发布", systemImage: "square.and.arrow.up")
+                    }
+                } else if let localVersion = template.version,
+                          let cloudVersion = template.cloudVersion,
+                          localVersion > cloudVersion {
+                    Button {
+                        templateToPublish = template
+                        showingPublishSheet = true
+                    } label: {
+                        Label("发布更新", systemImage: "square.and.arrow.up")
+                    }
                 }
             }
             

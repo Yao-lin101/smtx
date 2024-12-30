@@ -188,6 +188,8 @@ class LanguageSectionStore: ObservableObject {
                 errorMessage = "无效的语言分区"
             case .languageSectionNotFound:
                 errorMessage = "语言分区不存在"
+            case .noChanges:
+                errorMessage = "没有需要更新的内容"
             }
         } else {
             errorMessage = error.localizedDescription

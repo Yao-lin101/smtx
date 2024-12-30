@@ -42,6 +42,11 @@ struct APIConfig {
     
     // Template Upload URLs
     var uploadTemplatePackageURL: String { return "\(baseURL)/templates/upload-package/" }
+
+    // Template Update URLs
+    func updateTemplatePackageURL(uid: String) -> String {
+    return "\(baseURL)/api/v1/templates/\(uid)/update-package"
+    } 
     
     // Template Comments URLs
     func templateCommentsURL(templateUid: String) -> String { return "\(baseURL)/templates/\(templateUid)/comments/" }

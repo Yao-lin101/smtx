@@ -173,7 +173,8 @@ struct CreateTemplateView: View {
                     TimelineItemData(
                         script: item.script ?? "",
                         imageData: item.image,
-                        timestamp: item.timestamp
+                        timestamp: item.timestamp,
+                        createdAt: item.createdAt ?? Date()
                     )
                 }
             }
@@ -521,6 +522,7 @@ struct TimelineItemData: Identifiable {
     var script: String
     var imageData: Data?
     var timestamp: Double
+    var createdAt: Date
 }
 
 // 标签视图组件

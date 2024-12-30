@@ -94,6 +94,7 @@ class TemplateStorage {
         item.timestamp = timestamp
         item.script = script
         item.image = image.jpegData(compressionQuality: 0.8)
+        item.createdAt = Date()
         item.template = template
         
         template.updatedAt = Date()
@@ -264,6 +265,7 @@ class TemplateStorage {
             item.timestamp = itemData.timestamp
             item.script = itemData.script
             item.image = itemData.imageData
+            item.createdAt = itemData.createdAt
             item.template = template
         }
         

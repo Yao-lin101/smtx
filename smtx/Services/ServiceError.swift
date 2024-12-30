@@ -92,6 +92,7 @@ enum TemplateError: LocalizedError {
     case unauthorized
     case decodingError
     case operationFailed(String)
+    case noChanges
     
     var errorDescription: String? {
         switch self {
@@ -113,6 +114,8 @@ enum TemplateError: LocalizedError {
             return "数据解析失败"
         case .operationFailed(let message):
             return message
+        case .noChanges:
+            return "没有需要更新的内容"
         }
     }
 }

@@ -24,7 +24,8 @@ struct TemplateDetailView: View {
                                     TimelineItemData(
                                         script: item.script ?? "",
                                         imageData: item.image,
-                                        timestamp: item.timestamp
+                                        timestamp: item.timestamp,
+                                        createdAt: item.createdAt ?? Date()
                                     )
                                 },
                                 totalDuration: template.totalDuration
