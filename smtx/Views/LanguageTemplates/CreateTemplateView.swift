@@ -134,10 +134,44 @@ struct CreateTemplateView: View {
                 }
             }
             .onAppear {
+                // 打开页面时就创建临时模板
+                if existingTemplateId == nil {
+                    do {
+                        // 创建默认封面图片
+                        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 300))
+                        let defaultCoverImage = renderer.image { context in
+                            UIColor.systemGray5.setFill()
+                            context.fill(CGRect(x: 0, y: 0, width: 400, height: 300))
+                        }
+                        
+                        templateId = try TemplateStorage.shared.createTemplate(
+                            title: "",
+                            language: language,
+                            coverImage: defaultCoverImage
+                        )
+                        print("✅ Created temporary template: \(templateId ?? "")")
+                    } catch {
+                        print("❌ Failed to create temporary template: \(error)")
+                    }
+                }
+                
                 if existingTemplateId != nil {
                     loadExistingTemplate()
                 }
                 saveInitialState()
+            }
+            .onDisappear {
+                // 如果是临时模板且未保存，则清理
+                if existingTemplateId == nil && title.isEmpty {
+                    do {
+                        if let id = templateId {
+                            try TemplateStorage.shared.deleteTemplate(templateId: id)
+                            print("✅ Cleaned up temporary template: \(id)")
+                        }
+                    } catch {
+                        print("❌ Failed to clean up temporary template: \(error)")
+                    }
+                }
             }
         }
     }
@@ -191,7 +225,8 @@ struct CreateTemplateView: View {
             if existingTemplateId != nil {
                 try updateExistingTemplate()
             } else {
-                try createAndUpdateTemplate()
+                // 已经创建了临时模板，直接更新即可
+                try updateExistingTemplate()
             }
             
             // 发送模板更新通知并关闭视图
@@ -220,25 +255,6 @@ struct CreateTemplateView: View {
         )
         
         print("✅ Template updated with new duration")
-    }
-    
-    private func createAndUpdateTemplate() throws {
-        // 1. 创建默认封面图片
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 300))
-        let defaultCoverImage = renderer.image { context in
-            UIColor.systemGray5.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 400, height: 300))
-        }
-        
-        // 2. 创建新模板
-        templateId = try TemplateStorage.shared.createTemplate(
-            title: title,
-            language: language,
-            coverImage: defaultCoverImage
-        )
-        
-        // 3. 更新模板内容
-        try updateExistingTemplate()
     }
     
     private func saveInitialState() {
@@ -501,18 +517,8 @@ struct CreateTemplateView: View {
     
     // 添加新方法：处理时间轴编辑
     private func handleTimelineEdit() {
-        if templateId == nil {
-            // 如果模板还未创建，先创建模板
-            do {
-                try createAndUpdateTemplate()
-                showingTimelineEditor = true
-            } catch {
-                print("❌ Failed to create template before timeline editing: \(error)")
-            }
-        } else {
-            // 如果模板已存在，直接显示编辑器
-            showingTimelineEditor = true
-        }
+        // 由于模板在页面加载时就已创建，这里直接显示编辑器即可
+        showingTimelineEditor = true
     }
 }
 
