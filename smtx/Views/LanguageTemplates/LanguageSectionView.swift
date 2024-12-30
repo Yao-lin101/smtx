@@ -156,10 +156,9 @@ struct LanguageSectionView: View {
                                 Label("发布", systemImage: "square.and.arrow.up")
                             }
                             .tint(.orange)
-                        } else if let localVersion = template.version,
-                                  let cloudVersion = template.cloudVersion,
-                                  let _ = template.cloudUid,
-                                  localVersion > cloudVersion {
+                        } else if let cloudVersion = template.cloudVersion,
+                                  let localVersion = template.version,
+                                  VersionUtils.compareVersions(localVersion, cloudVersion) == .orderedDescending {
                             Button {
                                 Task {
                                     await PublishTemplateViewModel().updateTemplate(template)

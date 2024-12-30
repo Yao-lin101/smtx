@@ -228,8 +228,12 @@ class TemplateStorage {
             if versionComponents.count == 2,
                let major = Int(versionComponents[0]),
                let minor = Int(versionComponents[1]) {
-                // 增加小版本号
-                template.version = "\(major).\(minor + 1)"
+                // 增加次版本号，如果超过99则增加主版本号
+                if minor >= 99 {
+                    template.version = "\(major + 1).0"
+                } else {
+                    template.version = "\(major).\(minor + 1)"
+                }
             } else {
                 // 如果版本号格式不正确，重置为1.0
                 template.version = "1.0"
@@ -266,6 +270,7 @@ class TemplateStorage {
             item.script = itemData.script
             item.image = itemData.imageData
             item.createdAt = itemData.createdAt
+            item.updatedAt = Date()
             item.template = template
         }
         

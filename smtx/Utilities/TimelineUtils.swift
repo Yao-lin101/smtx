@@ -22,18 +22,30 @@ class TimelineUtils {
             var images: [String] = []
             var events: [[String: Any]] = []
             
+            // 使用计数器来生成图片名称
+            var imageCounter = 1
+            
             for item in items {
+                var event: [String: Any] = [
+                    "time": item.timestamp
+                ]
+                
+                // 添加文本内容
+                if let script = item.script, !script.isEmpty {
+                    event["text"] = script
+                }
+                
+                // 如果有图片，使用简单的数字序号命名
                 if let imageData = item.image {
-                    let imageName = UUID().uuidString + ".jpg"
+                    let imageName = String(format: "%03d.jpg", imageCounter)
                     timelineImages[imageName] = imageData
                     images.append(imageName)
-                    
-                    // 添加事件
-                    events.append([
-                        "time": item.timestamp,
-                        "image": imageName
-                    ])
+                    event["image"] = imageName
+                    imageCounter += 1
                 }
+                
+                // 无论是否有图片，都添加事件
+                events.append(event)
             }
             
             timelineJson["duration"] = duration

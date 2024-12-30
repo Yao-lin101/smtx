@@ -352,30 +352,46 @@ class CloudTemplateService {
     
     // MARK: - Template Update
     
-    func updateTemplate(_ template: Template, to languageSection: LanguageSection) async throws -> CloudTemplateUploadResponse {
+    func updateTemplate(_ template: Template) async throws -> CloudTemplateUploadResponse {
         guard let cloudUid = template.cloudUid,
               let lastSyncedAt = template.lastSyncedAt else {
+            print("❌ Invalid template: missing cloudUid or lastSyncedAt")
             throw TemplateError.invalidTemplate
         }
         
         // 1. 准备所需数据
         guard let coverImage = template.coverImage else {
+            print("❌ Invalid template: missing coverImage")
             throw TemplateError.invalidTemplate
         }
         
-        // 2. 检查是否有更新
+        // 2. 检查各部分是否有更新
         let timelineItems = template.timelineItems?.compactMap { $0 as? TimelineItem } ?? []
-        let hasTimelineChanges = timelineItems.contains(where: { item in
-            guard let itemDate = item.createdAt else { return true }
-            return itemDate > lastSyncedAt
-        })
         
-        guard let templateUpdatedAt = template.updatedAt else {
-            throw TemplateError.invalidTemplate
+        // 检查时间轴项目的更新
+        var updatedTimelineItems: [TimelineItem] = []
+        for item in timelineItems {
+            guard let itemDate = item.updatedAt else { continue }
+            if itemDate > lastSyncedAt {
+                updatedTimelineItems.append(item)
+            }
         }
-        let hasCoverChanges = templateUpdatedAt > lastSyncedAt
+        let hasTimelineChanges = !updatedTimelineItems.isEmpty
         
-        if !hasTimelineChanges && !hasCoverChanges {
+        // 检查封面更新
+        let hasCoverChanges = template.coverUpdatedAt?.compare(lastSyncedAt) == .orderedDescending
+        
+        // 检查元数据更新
+        let hasMetadataChanges = template.updatedAt?.compare(lastSyncedAt) == .orderedDescending
+        
+        print("📦 Update check:")
+        print("  - Has timeline changes: \(hasTimelineChanges)")
+        print("  - Has cover changes: \(hasCoverChanges)")
+        print("  - Has metadata changes: \(hasMetadataChanges)")
+        print("  - Last synced at: \(lastSyncedAt)")
+        
+        if !hasTimelineChanges && !hasCoverChanges && !hasMetadataChanges {
+            print("ℹ️ No changes detected")
             throw TemplateError.noChanges
         }
         
@@ -383,27 +399,32 @@ class CloudTemplateService {
         var coverThumbnail: Data? = nil
         if hasCoverChanges {
             coverThumbnail = try ImageUtils.generateThumbnail(from: coverImage)
+            print("🖼️ Generated new thumbnail: \(coverThumbnail?.count ?? 0) bytes")
         }
         
-        // 4. 如果时间轴有更新，生成时间轴数据
+        // 准备时间轴数据
         var timelineData: Data? = nil
-        var timelineImages: [Data]? = nil
-        if hasTimelineChanges {
+        var timelineImages: [String: Data]? = nil
+        if let items = template.timelineItems?.allObjects as? [TimelineItem] {
             let (data, images) = try TimelineUtils.generateTimelineData(
-                from: timelineItems,
+                from: items,
                 duration: template.totalDuration
             )
             timelineData = data
-            timelineImages = Array(images.values)
+            timelineImages = images
+            print("📝 Timeline data prepared:")
+            print("  - Events count: \(items.count)")
+            print("  - Images count: \(images.count)")
         }
         
-        // 5. 创建增量更新包
+        // 创建增量更新包
         let packageData = try TemplatePackageService.createIncrementalPackage(
             coverImage: hasCoverChanges ? coverImage : nil,
             coverThumbnail: coverThumbnail,
             timeline: timelineData,
-            timelineImages: timelineImages
+            timelineImages: timelineImages?.mapValues { $0 }
         )
+        print("📦 Created update package: \(packageData.count) bytes")
         
         // 6. 创建元数据
         let metadataDict: [String: Any] = [
@@ -413,6 +434,7 @@ class CloudTemplateService {
             "duration": Int(template.totalDuration),
             "tags": template.tags as? [String] ?? []
         ]
+        print("📋 Update metadata: \(metadataDict)")
         
         // 7. 准备上传数据
         let formData = MultipartFormData()
@@ -432,6 +454,8 @@ class CloudTemplateService {
             fileName: "template.zip",
             mimeType: "application/zip"
         )
+        
+        print("📤 Sending update request to: \(apiConfig.updateTemplatePackageURL(uid: cloudUid))")
         
         // 8. 发送请求
         return try await networkService.uploadFormData(

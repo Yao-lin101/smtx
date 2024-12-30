@@ -155,7 +155,7 @@ class TemplatePackageService {
         coverImage: Data?,
         coverThumbnail: Data?,
         timeline: Data?,
-        timelineImages: [Data]?
+        timelineImages: [String: Data]?
     ) throws -> Data {
         // 创建临时文件
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
@@ -168,73 +168,85 @@ class TemplatePackageService {
             throw TemplatePackageError.createArchiveFailed
         }
         
-        // 1. 添加封面图片
-        if let coverImage = coverImage {
-            try archive.addEntry(
-                with: "covers_original.jpg",
-                type: .file,
-                uncompressedSize: Int64(coverImage.count),
-                provider: { position, size in
-                    let rangeStart = Int(position)
-                    let rangeEnd = min(rangeStart + size, coverImage.count)
-                    return coverImage[rangeStart..<rangeEnd]
-                }
-            )
-        }
-        
-        // 2. 添加封面缩略图
-        if let coverThumbnail = coverThumbnail {
-            try archive.addEntry(
-                with: "covers_thumbnails.jpg",
-                type: .file,
-                uncompressedSize: Int64(coverThumbnail.count),
-                provider: { position, size in
-                    let rangeStart = Int(position)
-                    let rangeEnd = min(rangeStart + size, coverThumbnail.count)
-                    return coverThumbnail[rangeStart..<rangeEnd]
-                }
-            )
-        }
-        
-        // 3. 添加时间轴数据
-        if let timeline = timeline {
-            try archive.addEntry(
-                with: "timelines.json",
-                type: .file,
-                uncompressedSize: Int64(timeline.count),
-                provider: { position, size in
-                    let rangeStart = Int(position)
-                    let rangeEnd = min(rangeStart + size, timeline.count)
-                    return timeline[rangeStart..<rangeEnd]
-                }
-            )
-        }
-        
-        // 4. 添加时间轴图片
-        if let timelineImages = timelineImages {
-            for (index, imageData) in timelineImages.enumerated() {
+        do {
+            // 1. 添加封面图片
+            if let coverImage = coverImage {
                 try archive.addEntry(
-                    with: "images/\(index).jpg",
+                    with: "covers_original.jpg",
                     type: .file,
-                    uncompressedSize: Int64(imageData.count),
+                    uncompressedSize: Int64(coverImage.count),
+                    bufferSize: Int(4096),
                     provider: { position, size in
                         let rangeStart = Int(position)
-                        let rangeEnd = min(rangeStart + size, imageData.count)
-                        return imageData[rangeStart..<rangeEnd]
+                        let rangeEnd = min(rangeStart + size, coverImage.count)
+                        return coverImage[rangeStart..<rangeEnd]
                     }
                 )
             }
+            
+            // 2. 添加封面缩略图
+            if let coverThumbnail = coverThumbnail {
+                try archive.addEntry(
+                    with: "covers_thumbnails.jpg",
+                    type: .file,
+                    uncompressedSize: Int64(coverThumbnail.count),
+                    bufferSize: Int(4096),
+                    provider: { position, size in
+                        let rangeStart = Int(position)
+                        let rangeEnd = min(rangeStart + size, coverThumbnail.count)
+                        return coverThumbnail[rangeStart..<rangeEnd]
+                    }
+                )
+            }
+            
+            // 3. 添加时间轴数据
+            if let timeline = timeline {
+                try archive.addEntry(
+                    with: "timelines.json",
+                    type: .file,
+                    uncompressedSize: Int64(timeline.count),
+                    bufferSize: Int(4096),
+                    provider: { position, size in
+                        let rangeStart = Int(position)
+                        let rangeEnd = min(rangeStart + size, timeline.count)
+                        return timeline[rangeStart..<rangeEnd]
+                    }
+                )
+            }
+            
+            // 4. 添加时间轴图片
+            if let timelineImages = timelineImages {
+                for (imageName, imageData) in timelineImages {
+                    try archive.addEntry(
+                        with: "images/\(imageName)",
+                        type: .file,
+                        uncompressedSize: Int64(imageData.count),
+                        bufferSize: Int(4096),
+                        provider: { position, size in
+                            let rangeStart = Int(position)
+                            let rangeEnd = min(rangeStart + size, imageData.count)
+                            return imageData[rangeStart..<rangeEnd]
+                        }
+                    )
+                }
+            }
+        } catch {
+            throw TemplatePackageError.addEntryFailed
         }
         
         // 读取 ZIP 文件数据
-        guard let fileHandle = try? FileHandle(forReadingFrom: tempURL),
-              let data = try? fileHandle.readToEnd() else {
+        do {
+            let fileHandle = try FileHandle(forReadingFrom: tempURL)
+            defer {
+                try? fileHandle.close()
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+            guard let data = try fileHandle.readToEnd() else {
+                throw TemplatePackageError.readArchiveFailed
+            }
+            return data
+        } catch {
             throw TemplatePackageError.readArchiveFailed
         }
-        
-        try? fileHandle.close()
-        try? FileManager.default.removeItem(at: tempURL)
-        
-        return data
     }
 } 

@@ -250,7 +250,8 @@ struct CreateTemplateView: View {
         let currentCoverImageData = originalCoverImage?.jpegData(compressionQuality: 0.8)
         let hasCoverChanges = (currentCoverImageData == nil && initialCoverImageData != nil) ||
                              (currentCoverImageData != nil && initialCoverImageData == nil) ||
-                             (currentCoverImageData != nil && initialCoverImageData != nil && currentCoverImageData != initialCoverImageData)
+                             (currentCoverImageData != nil && initialCoverImageData != nil && 
+                              currentCoverImageData?.sha256() != initialCoverImageData?.sha256())
         
         // 检查时间轴项目是否有更新
         let hasTimelineChanges = Set(timelineItems).symmetricDifference(Set(initialTimelineItems)).count > 0
