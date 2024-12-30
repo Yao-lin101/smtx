@@ -7,6 +7,7 @@ enum NetworkError: LocalizedError {
     case invalidResponse
     case networkError(Error)
     case decodingError(Error)
+    case encodingError(Error)  // 添加编码错误类型
     case serverError(String)
     case unauthorized
     case unknown
@@ -21,6 +22,8 @@ enum NetworkError: LocalizedError {
             return "网络错误：\(error.localizedDescription)"
         case .decodingError(let error):
             return "数据解析错误：\(error.localizedDescription)"
+        case .encodingError(let error):
+            return "数据编码错误：\(error.localizedDescription)"
         case .serverError(let message):
             return message
         case .unauthorized:

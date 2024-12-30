@@ -135,6 +135,92 @@ struct CloudTemplate: Codable, Identifiable {
     let coverThumbnail: String
     let createdAt: Date
     let updatedAt: Date
+    let status: TemplateStatus
     
     var id: String { uid }
+    
+    enum TemplateStatus: String, Codable {
+        case processing = "processing"
+        case completed = "completed"
+        case failed = "failed"
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case uid, title, description
+        case authorUid = "author_uid"
+        case authorName = "author_name"
+        case languageSection = "language_section"
+        case tags, duration, version
+        case usageCount = "usage_count"
+        case likesCount = "likes_count"
+        case collectionsCount = "collections_count"
+        case recordingsCount = "recordings_count"
+        case commentsCount = "comments_count"
+        case isLiked = "is_liked"
+        case isCollected = "is_collected"
+        case timelineFile = "timeline_file"
+        case coverOriginal = "cover_original"
+        case coverThumbnail = "cover_thumbnail"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case status
+    }
+}
+
+struct CloudTemplateUpload: Codable {
+    let userUid: String
+    let title: String
+    let version: String
+    let tags: [String]
+    let duration: Int
+    let languageSectionUid: String
+    let coverUrl: String
+    let timelineItems: [TimelineItem]
+    let cloudUid: String?
+    
+    struct TimelineItem: Codable {
+        let timestamp: Double
+        let script: String
+        let imageUrl: String
+        
+        enum CodingKeys: String, CodingKey {
+            case timestamp
+            case script
+            case imageUrl = "image_url"
+        }
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case userUid = "user_uid"
+        case title
+        case version
+        case tags
+        case duration
+        case languageSectionUid = "language_section_uid"
+        case coverUrl = "cover_url"
+        case timelineItems = "timeline_items"
+        case cloudUid = "cloud_uid"
+    }
+}
+
+struct CloudTemplateUploadResponse: Codable {
+    let uid: String
+    let status: CloudTemplate.TemplateStatus
+    let errorMessage: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case uid
+        case status
+        case errorMessage = "error_message"
+    }
+}
+
+struct ErrorResponse: Codable {
+    let message: String
+    let code: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case message
+        case code
+    }
 } 

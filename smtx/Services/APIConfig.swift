@@ -40,6 +40,12 @@ struct APIConfig {
     func templateCollectURL(uid: String) -> String { return "\(baseURL)/templates/\(uid)/collect/" }
     func templateUsageURL(uid: String) -> String { return "\(baseURL)/templates/\(uid)/increment_usage/" }
     
+    // Template Upload URLs
+    var uploadImageURL: String { return "\(baseURL)/templates/upload-image/" }
+    var uploadCoverURL: String { return "\(baseURL)/templates/upload-cover/" }
+    var uploadTimelineImageURL: String { return "\(baseURL)/templates/upload-timeline-image/" }
+    var uploadTemplatePackageURL: String { return "\(baseURL)/templates/upload-package/" }
+    
     // Template Comments URLs
     func templateCommentsURL(templateUid: String) -> String { return "\(baseURL)/templates/\(templateUid)/comments/" }
     func templateCommentURL(templateUid: String, commentId: String) -> String { 

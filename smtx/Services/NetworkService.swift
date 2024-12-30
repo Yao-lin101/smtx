@@ -149,4 +149,122 @@ class NetworkService {
         
         return try await performRequest(request, decoder: decoder)
     }
+    
+    // 添加文件上传方法
+    func upload<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200...299:
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw NetworkError.decodingError(error)
+            }
+        case 401:
+            throw NetworkError.unauthorized
+        case 400...499:
+            let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data)
+            throw NetworkError.serverError(errorResponse?.message ?? "请求错误")
+        case 500...599:
+            throw NetworkError.serverError("服务器错误")
+        default:
+            throw NetworkError.unknown
+        }
+    }
+    
+    // 添加JSON数据发送方法
+    func postJSON<T: Encodable, R: Decodable>(_ urlString: String, body: T, decoder: JSONDecoder? = nil) async throws -> R {
+        guard let url = URL(string: urlString) else {
+            throw NetworkError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // 添加认证token
+        if let token = TokenManager.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        do {
+            request.httpBody = try JSONEncoder().encode(body)
+        } catch {
+            throw NetworkError.encodingError(error)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200...299:
+            do {
+                let decoder = decoder ?? JSONDecoder()
+                return try decoder.decode(R.self, from: data)
+            } catch {
+                throw NetworkError.decodingError(error)
+            }
+        case 401:
+            throw NetworkError.unauthorized
+        case 400...499:
+            let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data)
+            throw NetworkError.serverError(errorResponse?.message ?? "请求错误")
+        case 500...599:
+            throw NetworkError.serverError("服务器错误")
+        default:
+            throw NetworkError.unknown
+        }
+    }
+    
+    /// 上传 MultipartFormData
+    /// - Parameters:
+    ///   - url: 请求URL
+    ///   - formData: MultipartFormData 对象
+    /// - Returns: 解码后的响应数据
+    func uploadFormData<T: Decodable>(_ url: String, _ formData: MultipartFormData) async throws -> T {
+        var request = URLRequest(url: URL(string: url)!)
+        request.httpMethod = "POST"
+        request.setValue(formData.contentType, forHTTPHeaderField: "Content-Type")
+        
+        // 添加认证头
+        if let token = tokenManager.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        request.httpBody = formData.createBody()
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200...299:
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw NetworkError.decodingError(error)
+            }
+        case 401:
+            throw NetworkError.unauthorized
+        case 400...499:
+            if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                throw NetworkError.serverError(errorResponse.message)
+            }
+            throw NetworkError.serverError("请求错误")
+        case 500...599:
+            throw NetworkError.serverError("服务器错误")
+        default:
+            throw NetworkError.unknown
+        }
+    }
 } 
