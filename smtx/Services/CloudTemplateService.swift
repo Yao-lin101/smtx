@@ -251,48 +251,6 @@ class CloudTemplateService {
     
     // MARK: - Template Upload
     
-    enum ImageUploadType {
-        case cover
-        case timeline
-        
-        var url: String {
-            switch self {
-            case .cover:
-                return APIConfig.shared.uploadCoverURL
-            case .timeline:
-                return APIConfig.shared.uploadTimelineImageURL
-            }
-        }
-    }
-    
-    // 上传图片并获取URL
-    func uploadImage(_ imageData: Data, type: ImageUploadType) async throws -> String {
-        do {
-            let response: [String: String] = try await networkService.uploadMultipartFormData(
-                url: type.url,
-                data: imageData,
-                name: "image",
-                filename: "image.jpg",
-                mimeType: "image/jpeg"
-            )
-            guard let imageUrl = response["url"] else {
-                throw TemplateError.operationFailed("上传图片失败")
-            }
-            return imageUrl
-        } catch let error as NetworkError {
-            switch error {
-            case .serverError(let message):
-                throw TemplateError.serverError(message)
-            case .unauthorized:
-                throw TemplateError.unauthorized
-            case .networkError(let error):
-                throw TemplateError.networkError(error.localizedDescription)
-            default:
-                throw TemplateError.operationFailed("上传图片失败")
-            }
-        }
-    }
-    
     // 上传模板
     func uploadTemplate(_ template: Template, to languageSection: LanguageSection) async throws -> CloudTemplateUploadResponse {
         guard let userUid = await UserStore.shared.currentUser?.uid else {
@@ -305,65 +263,14 @@ class CloudTemplateService {
         }
         
         // 生成缩略图
-        let coverThumbnail: Data
-        if let uiImage = UIImage(data: coverImage) {
-            // 计算缩放比例，确保最大边不超过 300 像素
-            let maxSize: CGFloat = 300
-            let scale = min(maxSize / uiImage.size.width, maxSize / uiImage.size.height, 1.0)  // 添加 1.0 确保只缩小不放大
-            let newSize = CGSize(
-                width: min(round(uiImage.size.width * scale), maxSize),  // 确保不超过 300
-                height: min(round(uiImage.size.height * scale), maxSize)  // 确保不超过 300
-            )
-            
-            print("DEBUG - Original size: \(uiImage.size), New size: \(newSize), Scale: \(scale)")
-            
-            // 创建缩略图
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1.0  // 使用 1.0 scale 避免 Retina 分辨率
-            let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
-            let thumbnailImage = renderer.image { context in
-                uiImage.draw(in: CGRect(origin: .zero, size: newSize))
-            }
-            
-            // 转换为 JPEG 数据
-            if let thumbnailData = thumbnailImage.jpegData(compressionQuality: 0.8) {
-                coverThumbnail = thumbnailData
-                print("DEBUG - Thumbnail size: \(thumbnailImage.size), Data size: \(thumbnailData.count) bytes")
-            } else {
-                throw TemplateError.operationFailed("生成缩略图失败")
-            }
-        } else {
-            throw TemplateError.operationFailed("无效的封面图片数据")
-        }
+        let coverThumbnail = try ImageUtils.generateThumbnail(from: coverImage)
         
         // 生成时间轴数据
-        var timelineData = Data()
-        var timelineImages: [String: Data] = [:]
-        
-        if let items = template.timelineItems {
-            var timelineJson: [String: Any] = [:]
-            var images: [String] = []
-            var events: [[String: Any]] = []
-            
-            for case let item as TimelineItem in items {
-                if let imageData = item.image {
-                    let imageName = UUID().uuidString + ".jpg"
-                    timelineImages[imageName] = imageData
-                    images.append(imageName)
-                    
-                    // 添加事件
-                    events.append([
-                        "time": item.timestamp,
-                        "image": imageName
-                    ])
-                }
-            }
-            
-            timelineJson["duration"] = template.totalDuration
-            timelineJson["images"] = images
-            timelineJson["events"] = events
-            timelineData = try JSONSerialization.data(withJSONObject: timelineJson)
-        }
+        let timelineItems = template.timelineItems?.compactMap { $0 as? TimelineItem } ?? []
+        let (timelineData, timelineImages) = try TimelineUtils.generateTimelineData(
+            from: timelineItems,
+            duration: template.totalDuration
+        )
         
         // 2. 创建模板包
         let packageData = try TemplatePackageService.createPackage(
