@@ -36,6 +36,7 @@
         <attribute name="image" optional="YES" attributeType="Binary"/>
         <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="imageUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         
         <relationship name="template" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Template" inverseName="timelineItems" inverseEntity="Template"/>
         

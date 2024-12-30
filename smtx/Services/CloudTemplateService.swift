@@ -368,53 +368,102 @@ class CloudTemplateService {
         // 2. 检查各部分是否有更新
         let timelineItems = template.timelineItems?.compactMap { $0 as? TimelineItem } ?? []
         
-        // 检查时间轴项目的更新
-        var updatedTimelineItems: [TimelineItem] = []
+        // 获取现有的图片名称映射（使用imageUpdatedAt时间戳）
+        var existingImageNames: [Double: String] = [:]
+        
+        // 为所有有图片的项目生成图片名称
         for item in timelineItems {
-            guard let itemDate = item.updatedAt else { continue }
-            if itemDate > lastSyncedAt {
-                updatedTimelineItems.append(item)
+            if item.image != nil {  // 如果有图片数据
+                if let imageDate = item.imageUpdatedAt ?? item.createdAt {  // 如果都没有时间戳，跳过
+                    let timestamp = Int64(imageDate.timeIntervalSince1970 * 1000)
+                    existingImageNames[item.timestamp] = "img_\(timestamp).jpg"
+                }
             }
         }
-        let hasTimelineChanges = !updatedTimelineItems.isEmpty
+        
+        print("📝 Existing image names: \(existingImageNames)")
+        
+        // 检查时间轴项目的更新
+        var hasTimelineChanges = false
+        var updatedImageItems: [TimelineItem] = []
+        
+        // 检查每个时间点的更新
+        for item in timelineItems {
+            // 检查脚本更新
+            if let itemUpdatedAt = item.updatedAt,
+               itemUpdatedAt > lastSyncedAt {
+                hasTimelineChanges = true
+            }
+            
+            // 检查图片更新
+            if let imageDate = item.imageUpdatedAt,
+               imageDate > lastSyncedAt {
+                updatedImageItems.append(item)
+            }
+        }
         
         // 检查封面更新
-        let hasCoverChanges = template.coverUpdatedAt?.compare(lastSyncedAt) == .orderedDescending
+        var hasCoverChanges = false
+        if let coverUpdatedAt = template.coverUpdatedAt,
+           coverUpdatedAt > lastSyncedAt {
+            hasCoverChanges = true
+        }
         
         // 检查元数据更新
-        let hasMetadataChanges = template.updatedAt?.compare(lastSyncedAt) == .orderedDescending
+        var hasMetadataChanges = false
+        if let updatedAt = template.updatedAt,
+           updatedAt > lastSyncedAt {
+            hasMetadataChanges = true
+        }
         
         print("📦 Update check:")
         print("  - Has timeline changes: \(hasTimelineChanges)")
+        print("  - Has image updates: \(updatedImageItems.count)")
         print("  - Has cover changes: \(hasCoverChanges)")
         print("  - Has metadata changes: \(hasMetadataChanges)")
         print("  - Last synced at: \(lastSyncedAt)")
+        print("  - Existing image names: \(existingImageNames)")
         
-        if !hasTimelineChanges && !hasCoverChanges && !hasMetadataChanges {
-            print("ℹ️ No changes detected")
-            throw TemplateError.noChanges
+        // 3. 如果没有任何更新，直接返回错误
+        if !hasTimelineChanges && !hasCoverChanges && !hasMetadataChanges && updatedImageItems.isEmpty {
+            throw TemplateError.operationFailed("模板没有任何更新")
         }
         
-        // 3. 如果封面有更新，生成缩略图
+        // 4. 准备封面缩略图（如果需要）
         var coverThumbnail: Data? = nil
         if hasCoverChanges {
             coverThumbnail = try ImageUtils.generateThumbnail(from: coverImage)
-            print("🖼️ Generated new thumbnail: \(coverThumbnail?.count ?? 0) bytes")
         }
         
-        // 准备时间轴数据
+        // 5. 准备时间轴数据（如果需要）
         var timelineData: Data? = nil
         var timelineImages: [String: Data]? = nil
-        if let items = template.timelineItems?.allObjects as? [TimelineItem] {
-            let (data, images) = try TimelineUtils.generateTimelineData(
-                from: items,
-                duration: template.totalDuration
+        
+        if hasTimelineChanges {
+            // 如果有脚本更新，生成完整的时间轴 JSON，使用现有的图片名称
+            let (data, _) = try TimelineUtils.generateTimelineData(
+                from: timelineItems,
+                duration: template.totalDuration,
+                imageNames: existingImageNames,
+                includeImages: false  // 只生成 JSON，不包含图片数据
             )
             timelineData = data
+            print("📝 Timeline JSON generated with \(existingImageNames.count) image references")
+        }
+        
+        if !updatedImageItems.isEmpty {
+            // 只为有图片更新的项目生成图片数据，使用对应的图片名称
+            var images: [String: Data] = [:]
+            for item in updatedImageItems {
+                if let imageName = existingImageNames[item.timestamp],
+                   let imageData = item.image {
+                    images[imageName] = imageData
+                }
+            }
             timelineImages = images
             print("📝 Timeline data prepared:")
-            print("  - Events count: \(items.count)")
-            print("  - Images count: \(images.count)")
+            print("  - Updated images count: \(images.count)")
+            print("  - Image names: \(images.keys.sorted())")
         }
         
         // 创建增量更新包
@@ -422,7 +471,7 @@ class CloudTemplateService {
             coverImage: hasCoverChanges ? coverImage : nil,
             coverThumbnail: coverThumbnail,
             timeline: timelineData,
-            timelineImages: timelineImages?.mapValues { $0 }
+            timelineImages: timelineImages
         )
         print("📦 Created update package: \(packageData.count) bytes")
         

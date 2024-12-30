@@ -213,7 +213,15 @@ class TemplateStorage {
         try context.save()
     }
     
-    func updateTemplate(templateId: String, title: String, coverImage: UIImage?, tags: [String], timelineItems: [TimelineItemData], totalDuration: Double) throws {
+    func updateTemplate(
+        templateId: String,
+        title: String,
+        coverImage: UIImage?,
+        tags: [String],
+        timelineItems: [TimelineItemData],
+        totalDuration: Double,
+        onlyScriptChanges: Bool = false
+    ) throws {
         let template = try loadTemplate(templateId: templateId)
         
         print("📝 Updating template: \(templateId)")
@@ -221,6 +229,7 @@ class TemplateStorage {
         print("- Duration: \(totalDuration) seconds")
         print("- Tags: \(tags)")
         print("- Timeline items: \(timelineItems.count)")
+        print("- Only script changes: \(onlyScriptChanges)")
         
         // 更新版本号
         if let currentVersion = template.version {
@@ -247,31 +256,53 @@ class TemplateStorage {
         template.title = title
         template.updatedAt = Date()
         template.tags = tags as NSArray
-        template.totalDuration = totalDuration // 添加总时长更新
+        template.totalDuration = totalDuration
         
-        // 更新封面图片
+        // 更新封面图片（如果提供）
         if let coverImage = coverImage {
             template.coverImage = coverImage.jpegData(compressionQuality: 0.8)
         }
         
         // 更新时间轴项目
-        // 先删除现有的时间轴项目
-        if let existingItems = template.timelineItems {
-            for case let item as TimelineItem in existingItems {
-                context.delete(item)
-            }
-        }
+        let existingItems = template.timelineItems?.allObjects as? [TimelineItem] ?? []
+        let existingItemsDict = Dictionary(grouping: existingItems) { $0.timestamp }
         
-        // 添加新的时间轴项目
+        // 添加或更新时间轴项目
         for itemData in timelineItems {
-            let item = TimelineItem(context: context)
+            let existingItem = existingItemsDict[itemData.timestamp]?.first
+            let item = existingItem ?? TimelineItem(context: context)
+            
+            // 更新基本属性
             item.id = itemData.id.uuidString
             item.timestamp = itemData.timestamp
             item.script = itemData.script
-            item.image = itemData.imageData
             item.createdAt = itemData.createdAt
-            item.updatedAt = Date()
+            
+            // 更新图片相关属性
+            if !onlyScriptChanges {
+                let currentImageHash = item.image?.sha256()
+                let newImageHash = itemData.imageData?.sha256()
+                
+                if currentImageHash != newImageHash {
+                    item.image = itemData.imageData
+                    item.imageUpdatedAt = Date()
+                }
+            }
+            
+            // 更新脚本时间戳
+            if item.script != itemData.script {
+                item.updatedAt = Date()
+            }
+            
             item.template = template
+        }
+        
+        // 删除不再使用的项目
+        let timestampsToKeep = Set(timelineItems.map { $0.timestamp })
+        for item in existingItems {
+            if !timestampsToKeep.contains(item.timestamp) {
+                context.delete(item)
+            }
         }
         
         // 如果模板已发布到云端，标记为已修改

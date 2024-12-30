@@ -15,6 +15,7 @@ struct TimelineEditorView: View {
     @State private var selectedImage: PhotosPickerItem?
     @State private var previewImage: Image?
     @State private var originalImage: UIImage?
+    @State private var originalImageData: Data?
     @State private var showingCropper = false
     @State private var tempUIImage: UIImage?
     @State private var isEditing = false
@@ -187,6 +188,7 @@ struct TimelineEditorView: View {
                 if let image = tempUIImage {
                     ImageCropperView(image: image, aspectRatio: 16/9) { croppedImage in
                         originalImage = croppedImage
+                        originalImageData = croppedImage.jpegData(compressionQuality: 0.8)
                         previewImage = Image(uiImage: croppedImage)
                     }
                 }
@@ -204,16 +206,20 @@ struct TimelineEditorView: View {
         
         // 加载新的内容
         script = item.script
-        if let imageData = item.imageData,
-           let uiImage = UIImage(data: imageData) {
-            originalImage = uiImage
-            previewImage = Image(uiImage: uiImage)
+        if let imageData = item.imageData {
+            // 保存原始图片数据
+            originalImageData = imageData
+            if let uiImage = UIImage(data: imageData) {
+                originalImage = uiImage
+                previewImage = Image(uiImage: uiImage)
+            }
         }
     }
     
     private func clearForm() {
         script = ""
         originalImage = nil
+        originalImageData = nil
         previewImage = nil
     }
     
@@ -224,26 +230,32 @@ struct TimelineEditorView: View {
             // 如果是更新现有项目
             if let index = timelineItems.firstIndex(where: { $0.timestamp == currentTime }) {
                 var updatedItem = timelineItems[index]
-                updatedItem.script = script
-                if let image = originalImage,
-                   let imageData = image.jpegData(compressionQuality: 0.8) {
-                    updatedItem.imageData = imageData
+                
+                // 检查脚本是否变化
+                if updatedItem.script != script {
+                    updatedItem.script = script
+                    updatedItem.updatedAt = Date()
                 }
-                updatedItem.createdAt = Date()
+                
+                // 检查图片是否变化
+                if let newImageData = originalImageData {
+                    // 直接使用原始图片数据进行比较
+                    if updatedItem.imageData?.sha256() != newImageData.sha256() {
+                        updatedItem.imageData = newImageData
+                        updatedItem.imageUpdatedAt = Date()
+                    }
+                }
+                
                 timelineItems[index] = updatedItem
             } else {
                 // 添加新项目
-                var imageData: Data? = nil
-                if let image = originalImage {
-                    imageData = image.jpegData(compressionQuality: 0.8)
-                }
-                
                 let newItem = TimelineItemData(
                     script: script,
-                    imageData: imageData,
+                    imageData: originalImageData,
                     timestamp: currentTime,
                     createdAt: Date(),
-                    updatedAt: Date()
+                    updatedAt: Date(),
+                    imageUpdatedAt: originalImageData != nil ? Date() : nil
                 )
                 timelineItems.append(newItem)
             }

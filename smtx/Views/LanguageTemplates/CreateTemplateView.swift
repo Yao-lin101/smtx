@@ -209,7 +209,8 @@ struct CreateTemplateView: View {
                         imageData: item.image,
                         timestamp: item.timestamp,
                         createdAt: item.createdAt ?? Date(),
-                        updatedAt: item.updatedAt ?? Date()
+                        updatedAt: item.updatedAt ?? Date(),
+                        imageUpdatedAt: item.imageUpdatedAt
                     )
                 }
             }
@@ -240,6 +241,65 @@ struct CreateTemplateView: View {
         }
     }
     
+    private struct TimelineChanges {
+        var hasScriptChanges: Bool = false
+        var hasImageChanges: Bool = false
+        var changedImageTimestamps: Set<Double> = []
+        
+        var hasAnyChanges: Bool {
+            return hasScriptChanges || hasImageChanges
+        }
+    }
+    
+    private func detectTimelineChanges() -> TimelineChanges {
+        var changes = TimelineChanges()
+        
+        // 创建字典以便快速查找
+        let initialItemsDict = Dictionary(grouping: initialTimelineItems) { $0.timestamp }
+        let currentItemsDict = Dictionary(grouping: timelineItems) { $0.timestamp }
+        
+        // 检查每个时间点
+        let allTimestamps = Set(initialTimelineItems.map { $0.timestamp }).union(timelineItems.map { $0.timestamp })
+        
+        for timestamp in allTimestamps {
+            let initialItems = initialItemsDict[timestamp] ?? []
+            let currentItems = currentItemsDict[timestamp] ?? []
+            
+            // 如果时间点的项目数量不同，认为是完整的变化
+            if initialItems.count != currentItems.count {
+                changes.hasScriptChanges = true
+                changes.hasImageChanges = true
+                if let item = currentItems.first, item.imageData != nil {
+                    changes.changedImageTimestamps.insert(timestamp)
+                }
+                continue
+            }
+            
+            // 比较每个项目的内容
+            for (initial, current) in zip(initialItems, currentItems) {
+                // 检查脚本是否变化
+                if initial.script != current.script {
+                    changes.hasScriptChanges = true
+                }
+                
+                // 检查图片是否变化
+                let initialImageHash = initial.imageData?.sha256()
+                let currentImageHash = current.imageData?.sha256()
+                if initialImageHash != currentImageHash {
+                    changes.hasImageChanges = true
+                    if current.imageData != nil {
+                        changes.changedImageTimestamps.insert(timestamp)
+                        print("🔍 Image change detected at timestamp \(timestamp)")
+                        print("  - Initial hash: \(initialImageHash ?? "nil")")
+                        print("  - Current hash: \(currentImageHash ?? "nil")")
+                    }
+                }
+            }
+        }
+        
+        return changes
+    }
+    
     private func updateExistingTemplate() throws {
         guard let templateId = templateId else { return }
         
@@ -253,12 +313,14 @@ struct CreateTemplateView: View {
                              (currentCoverImageData != nil && initialCoverImageData != nil && 
                               currentCoverImageData?.sha256() != initialCoverImageData?.sha256())
         
-        // 检查时间轴项目是否有更新
-        let hasTimelineChanges = Set(timelineItems).symmetricDifference(Set(initialTimelineItems)).count > 0
+        // 检查时间轴项目的具体变化
+        let timelineChanges = detectTimelineChanges()
         
         print("📦 Update check:")
         print("  - Has cover changes: \(hasCoverChanges)")
-        print("  - Has timeline changes: \(hasTimelineChanges)")
+        print("  - Has timeline script changes: \(timelineChanges.hasScriptChanges)")
+        print("  - Has timeline image changes: \(timelineChanges.hasImageChanges)")
+        print("  - Changed image timestamps: \(timelineChanges.changedImageTimestamps)")
         print("  - Initial timeline items count: \(initialTimelineItems.count)")
         print("  - Current timeline items count: \(timelineItems.count)")
         
@@ -272,7 +334,7 @@ struct CreateTemplateView: View {
         }
         
         // 如果时间轴有更新，设置每个修改项的 updatedAt
-        if hasTimelineChanges {
+        if timelineChanges.hasAnyChanges {
             // 获取现有的时间轴项目
             let existingItems = template.timelineItems?.allObjects as? [TimelineItem] ?? []
             
@@ -284,10 +346,37 @@ struct CreateTemplateView: View {
                 // 更新项目属性
                 item.id = UUID().uuidString
                 item.timestamp = itemData.timestamp
-                item.script = itemData.script
-                item.image = itemData.imageData
+                
+                // 只在脚本确实变化时更新updatedAt
+                if item.script != itemData.script {
+                    item.script = itemData.script
+                    item.updatedAt = Date()
+                } else {
+                    item.script = itemData.script
+                }
+                
+                // 只在图片确实变化时更新图片数据和imageUpdatedAt
+                if timelineChanges.changedImageTimestamps.contains(itemData.timestamp) {
+                    print("📸 Processing image for timestamp \(itemData.timestamp)")
+                    print("  - Current imageUpdatedAt: \(item.imageUpdatedAt?.description ?? "nil")")
+                    
+                    // 检查图片数据是否真的变化了
+                    let currentImageHash = item.image?.sha256()
+                    let newImageHash = itemData.imageData?.sha256()
+                    print("  - Current image hash: \(currentImageHash ?? "nil")")
+                    print("  - New image hash: \(newImageHash ?? "nil")")
+                    
+                    if currentImageHash != newImageHash {
+                        print("  - Image data changed, updating imageUpdatedAt")
+                        item.image = itemData.imageData
+                        item.imageUpdatedAt = Date()
+                        print("  - New imageUpdatedAt: \(item.imageUpdatedAt?.description ?? "nil")")
+                    } else {
+                        print("  - Image data unchanged, keeping original imageUpdatedAt")
+                    }
+                }
+                
                 item.createdAt = itemData.createdAt
-                item.updatedAt = Date() // 设置更新时间为当前时间
                 item.template = template
                 
                 print("  - Updated timeline item: timestamp=\(itemData.timestamp), updatedAt=\(item.updatedAt ?? Date())")
@@ -309,7 +398,8 @@ struct CreateTemplateView: View {
             coverImage: originalCoverImage,
             tags: tags,
             timelineItems: timelineItems,
-            totalDuration: totalDuration
+            totalDuration: totalDuration,
+            onlyScriptChanges: timelineChanges.hasScriptChanges && !timelineChanges.hasImageChanges
         )
         
         print("✅ Template updated with new timestamps")
@@ -587,7 +677,8 @@ struct TimelineItemData: Identifiable, Equatable, Hashable {
     var imageData: Data?
     var timestamp: Double
     var createdAt: Date
-    var updatedAt: Date // 添加更新时间字段
+    var updatedAt: Date
+    var imageUpdatedAt: Date?
     
     // 实现 Equatable 协议
     static func == (lhs: TimelineItemData, rhs: TimelineItemData) -> Bool {
@@ -595,7 +686,8 @@ struct TimelineItemData: Identifiable, Equatable, Hashable {
                lhs.imageData == rhs.imageData &&
                lhs.timestamp == rhs.timestamp &&
                lhs.createdAt == rhs.createdAt &&
-               lhs.updatedAt == rhs.updatedAt
+               lhs.updatedAt == rhs.updatedAt &&
+               lhs.imageUpdatedAt == rhs.imageUpdatedAt
     }
     
     // 实现 Hashable 协议
@@ -605,6 +697,7 @@ struct TimelineItemData: Identifiable, Equatable, Hashable {
         hasher.combine(timestamp)
         hasher.combine(createdAt)
         hasher.combine(updatedAt)
+        hasher.combine(imageUpdatedAt)
     }
 }
 
