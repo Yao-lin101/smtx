@@ -25,7 +25,8 @@ struct TemplateDetailView: View {
                                         script: item.script ?? "",
                                         imageData: item.image,
                                         timestamp: item.timestamp,
-                                        createdAt: item.createdAt ?? Date()
+                                        createdAt: item.createdAt ?? Date(),
+                                        updatedAt: item.updatedAt ?? Date()
                                     )
                                 },
                                 totalDuration: template.totalDuration

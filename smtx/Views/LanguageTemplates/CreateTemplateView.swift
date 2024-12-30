@@ -208,7 +208,8 @@ struct CreateTemplateView: View {
                         script: item.script ?? "",
                         imageData: item.image,
                         timestamp: item.timestamp,
-                        createdAt: item.createdAt ?? Date()
+                        createdAt: item.createdAt ?? Date(),
+                        updatedAt: item.updatedAt ?? Date()
                     )
                 }
             }
@@ -245,6 +246,62 @@ struct CreateTemplateView: View {
         let totalDuration = Double(selectedMinutes * 60 + selectedSeconds)
         print("📝 Updating template duration: \(totalDuration) seconds")
         
+        // 检查封面是否有更新
+        let currentCoverImageData = originalCoverImage?.jpegData(compressionQuality: 0.8)
+        let hasCoverChanges = (currentCoverImageData == nil && initialCoverImageData != nil) ||
+                             (currentCoverImageData != nil && initialCoverImageData == nil) ||
+                             (currentCoverImageData != nil && initialCoverImageData != nil && currentCoverImageData != initialCoverImageData)
+        
+        // 检查时间轴项目是否有更新
+        let hasTimelineChanges = Set(timelineItems).symmetricDifference(Set(initialTimelineItems)).count > 0
+        
+        print("📦 Update check:")
+        print("  - Has cover changes: \(hasCoverChanges)")
+        print("  - Has timeline changes: \(hasTimelineChanges)")
+        print("  - Initial timeline items count: \(initialTimelineItems.count)")
+        print("  - Current timeline items count: \(timelineItems.count)")
+        
+        // 获取当前模板
+        let template = try TemplateStorage.shared.loadTemplate(templateId: templateId)
+        
+        // 如果封面有更新，设置 coverUpdatedAt
+        if hasCoverChanges {
+            template.coverUpdatedAt = Date()
+            print("  - Updated cover timestamp: \(template.coverUpdatedAt ?? Date())")
+        }
+        
+        // 如果时间轴有更新，设置每个修改项的 updatedAt
+        if hasTimelineChanges {
+            // 获取现有的时间轴项目
+            let existingItems = template.timelineItems?.allObjects as? [TimelineItem] ?? []
+            
+            // 更新或创建时间轴项目
+            for itemData in timelineItems {
+                // 查找现有项目或创建新项目
+                let item = existingItems.first(where: { $0.timestamp == itemData.timestamp }) ?? TimelineItem(context: template.managedObjectContext!)
+                
+                // 更新项目属性
+                item.id = UUID().uuidString
+                item.timestamp = itemData.timestamp
+                item.script = itemData.script
+                item.image = itemData.imageData
+                item.createdAt = itemData.createdAt
+                item.updatedAt = Date() // 设置更新时间为当前时间
+                item.template = template
+                
+                print("  - Updated timeline item: timestamp=\(itemData.timestamp), updatedAt=\(item.updatedAt ?? Date())")
+            }
+            
+            // 删除不再使用的项目
+            let timestampsToKeep = Set(timelineItems.map { $0.timestamp })
+            for item in existingItems {
+                if !timestampsToKeep.contains(item.timestamp) {
+                    template.managedObjectContext?.delete(item)
+                }
+            }
+        }
+        
+        // 更新模板其他属性
         try TemplateStorage.shared.updateTemplate(
             templateId: templateId,
             title: title,
@@ -254,7 +311,7 @@ struct CreateTemplateView: View {
             totalDuration: totalDuration
         )
         
-        print("✅ Template updated with new duration")
+        print("✅ Template updated with new timestamps")
     }
     
     private func saveInitialState() {
@@ -523,12 +580,31 @@ struct CreateTemplateView: View {
 }
 
 // 时间轴项目数据模型
-struct TimelineItemData: Identifiable {
+struct TimelineItemData: Identifiable, Equatable, Hashable {
     let id = UUID()
     var script: String
     var imageData: Data?
     var timestamp: Double
     var createdAt: Date
+    var updatedAt: Date // 添加更新时间字段
+    
+    // 实现 Equatable 协议
+    static func == (lhs: TimelineItemData, rhs: TimelineItemData) -> Bool {
+        return lhs.script == rhs.script &&
+               lhs.imageData == rhs.imageData &&
+               lhs.timestamp == rhs.timestamp &&
+               lhs.createdAt == rhs.createdAt &&
+               lhs.updatedAt == rhs.updatedAt
+    }
+    
+    // 实现 Hashable 协议
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(script)
+        hasher.combine(imageData)
+        hasher.combine(timestamp)
+        hasher.combine(createdAt)
+        hasher.combine(updatedAt)
+    }
 }
 
 // 标签视图组件

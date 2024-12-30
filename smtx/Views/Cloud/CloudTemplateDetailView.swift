@@ -90,9 +90,9 @@ struct CloudTemplateDetailView: View {
                     // 时间轴预览
                     TimelinePreviewView(
                         timelineItems: [
-                            TimelineItemData(script: "示例文本1", imageData: nil, timestamp: 1.0, createdAt: Date()),
-                            TimelineItemData(script: "示例文本2", imageData: nil, timestamp: 2.5, createdAt: Date()),
-                            TimelineItemData(script: "示例文本3", imageData: nil, timestamp: 4.0, createdAt: Date())
+                            TimelineItemData(script: "示例文本1", imageData: nil, timestamp: 1.0, createdAt: Date(), updatedAt: Date()),
+                            TimelineItemData(script: "示例文本2", imageData: nil, timestamp: 2.5, createdAt: Date(), updatedAt: Date()),
+                            TimelineItemData(script: "示例文本3", imageData: nil, timestamp: 4.0, createdAt: Date(), updatedAt: Date())
                         ],
                         totalDuration: Double(template.duration)
                     )

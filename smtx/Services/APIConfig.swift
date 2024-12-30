@@ -45,7 +45,7 @@ struct APIConfig {
 
     // Template Update URLs
     func updateTemplatePackageURL(uid: String) -> String {
-    return "\(baseURL)/api/v1/templates/\(uid)/update-package"
+        return "\(baseURL)/templates/\(uid)/update-package/"
     } 
     
     // Template Comments URLs

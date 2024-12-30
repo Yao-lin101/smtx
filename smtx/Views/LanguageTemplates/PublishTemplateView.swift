@@ -62,7 +62,13 @@ struct PublishTemplateView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("发布") {
                         Task {
-                            await viewModel.publishTemplate(template, to: selectedSection!)
+                            if template.cloudUid != nil {
+                                // 如果已有云端 ID，执行增量更新
+                                await viewModel.updateTemplate(template)
+                            } else {
+                                // 否则执行首次发布
+                                await viewModel.publishTemplate(template, to: selectedSection!)
+                            }
                         }
                     }
                     .disabled(selectedSection == nil || viewModel.isPublishing)
@@ -167,5 +173,42 @@ class PublishTemplateViewModel: ObservableObject {
     
     func updatePublishProgress(_ progress: Double) {
         publishProgress = progress
+    }
+    
+    func updateTemplate(_ template: Template) async {
+        isPublishing = true
+        publishProgress = 0.0
+        showError = false
+        errorMessage = nil
+        
+        do {
+            // 1. 更新模板
+            let response = try await service.updateTemplate(template)
+            publishProgress = 1.0
+            
+            // 2. 更新本地模板状态
+            try storage.updateCloudStatus(
+                templateId: template.id ?? "",
+                cloudUid: response.uid,
+                cloudVersion: template.version ?? "1.0"
+            )
+            
+            // 3. 发送模板更新通知
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .templateDidUpdate, object: nil)
+            }
+            
+            // 4. 显示成功提示
+            showSuccess = true
+        } catch {
+            if let templateError = error as? TemplateError {
+                errorMessage = templateError.localizedDescription
+            } else {
+                errorMessage = error.localizedDescription
+            }
+            showError = true
+        }
+        
+        isPublishing = false
     }
 } 

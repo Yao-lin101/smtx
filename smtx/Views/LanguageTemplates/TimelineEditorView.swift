@@ -242,7 +242,8 @@ struct TimelineEditorView: View {
                     script: script,
                     imageData: imageData,
                     timestamp: currentTime,
-                    createdAt: Date()
+                    createdAt: Date(),
+                    updatedAt: Date()
                 )
                 timelineItems.append(newItem)
             }

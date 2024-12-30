@@ -161,8 +161,10 @@ struct LanguageSectionView: View {
                                   let _ = template.cloudUid,
                                   localVersion > cloudVersion {
                             Button {
-                                templateToPublish = template
-                                showingPublishSheet = true
+                                Task {
+                                    await PublishTemplateViewModel().updateTemplate(template)
+                                    loadTemplates()
+                                }
                             } label: {
                                 Label("发布更新", systemImage: "square.and.arrow.up")
                             }
@@ -192,8 +194,10 @@ struct LanguageSectionView: View {
                           let _ = template.cloudUid,
                           localVersion > cloudVersion {
                     Button {
-                        templateToPublish = template
-                        showingPublishSheet = true
+                        Task {
+                            await PublishTemplateViewModel().updateTemplate(template)
+                            loadTemplates()
+                        }
                     } label: {
                         Label("发布更新", systemImage: "square.and.arrow.up")
                     }
