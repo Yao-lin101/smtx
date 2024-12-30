@@ -218,7 +218,10 @@ struct LanguageSectionView: View {
     private func loadTemplates() {
         do {
             let allTemplates = try TemplateStorage.shared.listTemplatesByLanguage()
-            let newTemplates = allTemplates[language] ?? []
+            let newTemplates = (allTemplates[language] ?? []).filter { template in
+                guard let version = template.version else { return false }
+                return version != "1.0"
+            }
             if templates != newTemplates {
                 templates = newTemplates
                 refreshTrigger = UUID()
