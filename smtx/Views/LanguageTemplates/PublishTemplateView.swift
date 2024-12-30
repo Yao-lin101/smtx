@@ -145,7 +145,13 @@ class PublishTemplateViewModel: ObservableObject {
                 cloudVersion: template.version ?? "1.0"
             )
             
-            // 3. 显示成功提示
+            // 3. 发送模板更新通知
+            DispatchQueue.main.async {
+                print("📣 Publishing templateDidUpdate notification")
+                NotificationCenter.default.post(name: .templateDidUpdate, object: nil)
+            }
+            
+            // 4. 显示成功提示
             showSuccess = true
         } catch {
             if let templateError = error as? TemplateError {

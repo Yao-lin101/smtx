@@ -91,9 +91,13 @@ struct LanguageSectionView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .templateDidUpdate)) { _ in
             let now = Date()
+            print("📱 Received templateDidUpdate notification")
             if now.timeIntervalSince(lastUpdateTime) >= debounceInterval {
+                print("⏰ Debounce check passed, reloading templates...")
                 loadTemplates()
                 lastUpdateTime = now
+            } else {
+                print("⏰ Debounce check failed, skipping reload")
             }
         }
         .sheet(item: $templateToPublish) { template in
@@ -154,6 +158,7 @@ struct LanguageSectionView: View {
                             .tint(.orange)
                         } else if let localVersion = template.version,
                                   let cloudVersion = template.cloudVersion,
+                                  let _ = template.cloudUid,
                                   localVersion > cloudVersion {
                             Button {
                                 templateToPublish = template
@@ -184,6 +189,7 @@ struct LanguageSectionView: View {
                     }
                 } else if let localVersion = template.version,
                           let cloudVersion = template.cloudVersion,
+                          let _ = template.cloudUid,
                           localVersion > cloudVersion {
                     Button {
                         templateToPublish = template
@@ -217,16 +223,22 @@ struct LanguageSectionView: View {
     
     private func loadTemplates() {
         do {
+            print("🔄 Starting to load templates for language: \(language)")
             let allTemplates = try TemplateStorage.shared.listTemplatesByLanguage()
             let newTemplates = (allTemplates[language] ?? []).filter { template in
                 guard let version = template.version else { return false }
                 return version != "1.0"
             }
-            if templates != newTemplates {
-                templates = newTemplates
-                refreshTrigger = UUID()
-                print("✅ Loaded \(templates.count) templates for language: \(language)")
+            print("📦 Loaded templates count: \(newTemplates.count)")
+            print("🔍 Templates cloud status:")
+            for template in newTemplates {
+                print("  - Template: \(template.title ?? ""), CloudUID: \(template.cloudUid ?? "nil"), Version: \(template.version ?? "nil"), CloudVersion: \(template.cloudVersion ?? "nil")")
             }
+            
+            // 强制更新列表和刷新触发器
+            templates = newTemplates
+            refreshTrigger = UUID()
+            print("✅ Templates list updated")
         } catch {
             print("❌ Failed to load templates: \(error)")
         }
