@@ -4,6 +4,8 @@ import SwiftUI
 @MainActor
 class CloudTemplateViewModel: ObservableObject {
     private let service = CloudTemplateService.shared
+    private let store = LanguageSectionStore.shared  // 添加 store
+    private var hasInitialized = false  // 添加初始化标记
     
     // MARK: - Published Properties
     
@@ -56,7 +58,7 @@ class CloudTemplateViewModel: ObservableObject {
     }
     
     var subscribedSections: [LanguageSection] {
-        languageSections.filter { $0.isSubscribed }
+        store.sections.filter { $0.isSubscribed }
     }
     
     var unsubscribedSections: [LanguageSection] {
@@ -66,6 +68,7 @@ class CloudTemplateViewModel: ObservableObject {
     // MARK: - Local Storage
     
     private func saveLocalSubscribedSections() {
+        print("📝 保存订阅分区到本地，数量: \(subscribedSections.count)")
         let sections = subscribedSections
         if let data = try? JSONEncoder().encode(sections) {
             subscribedSectionsData = data
@@ -74,16 +77,28 @@ class CloudTemplateViewModel: ObservableObject {
     
     private func loadLocalSubscribedSections() -> [LanguageSection] {
         if let sections = try? JSONDecoder().decode([LanguageSection].self, from: subscribedSectionsData) {
+            print("📖 从本地加载订阅分区，数量: \(sections.count)")
             return sections
         }
+        print("⚠️ 本地没有订阅分区数据")
         return []
     }
     
     // MARK: - Initial Loading
     
     func loadLocalData() {
+        print("🔄 开始加载本地数据")
         // 从本地加载订阅数据
         languageSections = loadLocalSubscribedSections()
+        print("✅ 完成本地数据加载，分区数量: \(languageSections.count)")
+        
+        // 如果是首次初始化，从服务器获取数据
+        if !hasInitialized {
+            Task {
+                await fetchSubscribedSections()
+            }
+            hasInitialized = true
+        }
     }
     
     func loadInitialData(selectedLanguageUid: String) async {
@@ -294,6 +309,18 @@ class CloudTemplateViewModel: ObservableObject {
     }
     
     func selectedLanguage(uid: String) -> LanguageSection? {
-        languageSections.first { $0.uid == uid }
+        store.sections.first { $0.uid == uid }
+    }
+    
+    func fetchSubscribedSections() async {
+        do {
+            // 从云端获取订阅的语言分区
+            let sections = try await CloudTemplateService.shared.fetchLanguageSections()
+            // 更新 store 的数据，而不是更新 viewModel 的数据
+            await store.updateSections(sections)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
     }
 } 

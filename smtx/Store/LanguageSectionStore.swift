@@ -202,4 +202,9 @@ class LanguageSectionStore: ObservableObject {
         lastRefreshTime = nil
         subscribedSectionsData = Data()
     }
+    
+    func updateSections(_ newSections: [LanguageSection]) {
+        sections = newSections
+        saveLocalSubscribedSections()
+    }
 } 

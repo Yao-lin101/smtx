@@ -31,9 +31,11 @@ struct CloudTemplatesView: View {
             Text(viewModel.errorMessage ?? "未知错误")
         }
         .sheet(isPresented: $showingSubscribeSheet) {
+            viewModel.loadLocalData()
+        } content: {
             SubscribeLanguageView(searchText: $searchText)
         }
-        .onAppear {
+        .task {
             viewModel.loadLocalData()
         }
         .onChange(of: viewModel.subscribedSections) { sections in
