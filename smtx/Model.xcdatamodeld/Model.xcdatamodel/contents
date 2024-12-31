@@ -19,7 +19,6 @@
         
         <!-- Template Data -->
         <attribute name="title" attributeType="String"/>
-        <attribute name="language" attributeType="String"/>
         <attribute name="coverImage" attributeType="Binary"/>
         <attribute name="totalDuration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="NSArray"/>
@@ -27,6 +26,7 @@
         <!-- Relationships -->
         <relationship name="timelineItems" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TimelineItem" inverseName="template" inverseEntity="TimelineItem"/>
         <relationship name="records" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Record" inverseName="template" inverseEntity="Record"/>
+        <relationship name="section" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LocalLanguageSection" inverseName="templates" inverseEntity="LocalLanguageSection"/>
     </entity>
     
     <entity name="TimelineItem" representedClassName="TimelineItem" syncable="YES" codeGenerationType="class">
@@ -54,6 +54,22 @@
         <attribute name="audioData" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
         
         <relationship name="template" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Template" inverseName="records" inverseEntity="Template"/>
+        
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    
+    <entity name="LocalLanguageSection" representedClassName="LocalLanguageSection" syncable="YES" codeGenerationType="class">
+        <attribute name="id" attributeType="String"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="cloudSectionId" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+        
+        <relationship name="templates" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Template" inverseName="section" inverseEntity="Template"/>
         
         <uniquenessConstraints>
             <uniquenessConstraint>

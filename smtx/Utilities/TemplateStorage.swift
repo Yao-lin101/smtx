@@ -31,7 +31,7 @@ class TemplateStorage {
     
     // MARK: - Template Operations
     
-    func createTemplate(title: String, language: String, coverImage: UIImage) throws -> String {
+    func createTemplate(title: String, sectionId: String, coverImage: UIImage) throws -> String {
         let template = Template(context: context)
         let templateId = UUID().uuidString
         
@@ -52,10 +52,13 @@ class TemplateStorage {
         
         // Set template data
         template.title = title
-        template.language = language
         template.coverImage = coverImage.jpegData(compressionQuality: 0.8)
         template.totalDuration = 0
         template.tags = []
+        
+        // Associate with section
+        let section = try loadLanguageSection(id: sectionId)
+        template.section = section
         
         try context.save()
         return templateId
@@ -81,8 +84,18 @@ class TemplateStorage {
     }
     
     func listTemplatesByLanguage() throws -> [String: [Template]] {
-        let templates = try listTemplates()
-        return Dictionary(grouping: templates) { $0.language ?? "" }
+        let sections = try listLanguageSections()
+        var templatesByLanguage: [String: [Template]] = [:]
+        
+        for section in sections {
+            if let templates = section.templates?.allObjects as? [Template] {
+                templatesByLanguage[section.name ?? ""] = templates.sorted { 
+                    ($0.updatedAt ?? Date.distantPast) > ($1.updatedAt ?? Date.distantPast)
+                }
+            }
+        }
+        
+        return templatesByLanguage
     }
     
     func saveTimelineItem(templateId: String, timestamp: Double, script: String, image: UIImage) throws -> String {
@@ -336,16 +349,76 @@ class TemplateStorage {
         print("- Cloud UID: \(cloudUid)")
         print("- Cloud version: \(cloudVersion)")
     }
-}
-
-// MARK: - Errors
-
-enum StorageError: Error {
-    case directoryCreationFailed
-    case templateNotFound
-    case imageProcessingFailed
-    case invalidData
-    case fileNotFound
+    
+    // MARK: - Language Section Operations
+    
+    func createLanguageSection(name: String, cloudSectionId: String? = nil) throws -> LocalLanguageSection {
+        let section = LocalLanguageSection(context: context)
+        section.id = UUID().uuidString
+        section.name = name
+        section.cloudSectionId = cloudSectionId
+        section.createdAt = Date()
+        section.updatedAt = Date()
+        
+        try context.save()
+        return section
+    }
+    
+    func loadLanguageSection(id: String) throws -> LocalLanguageSection {
+        let request = LocalLanguageSection.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", id)
+        
+        guard let section = try context.fetch(request).first else {
+            throw StorageError.sectionNotFound
+        }
+        
+        return section
+    }
+    
+    func listLanguageSections() throws -> [LocalLanguageSection] {
+        let request = LocalLanguageSection.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
+        return try context.fetch(request)
+    }
+    
+    func updateLanguageSection(id: String, name: String, cloudSectionId: String?) throws {
+        let section = try loadLanguageSection(id: id)
+        section.name = name
+        section.cloudSectionId = cloudSectionId
+        section.updatedAt = Date()
+        
+        try context.save()
+    }
+    
+    func deleteLanguageSection(_ section: LocalLanguageSection) throws {
+        // 由于设置了级联删除，删除分区时会自动删除关联的模板
+        context.delete(section)
+        try context.save()
+    }
+    
+    func assignTemplateToSection(templateId: String, sectionId: String) throws {
+        let template = try loadTemplate(templateId: templateId)
+        let section = try loadLanguageSection(id: sectionId)
+        
+        template.section = section
+        try context.save()
+    }
+    
+    // MARK: - Error Types
+    
+    enum StorageError: Error {
+        case templateNotFound
+        case sectionNotFound
+        
+        var localizedDescription: String {
+            switch self {
+            case .templateNotFound:
+                return "Template not found"
+            case .sectionNotFound:
+                return "Language section not found"
+            }
+        }
+    }
 }
 
 // MARK: - Helper Types

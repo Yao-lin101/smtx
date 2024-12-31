@@ -19,6 +19,7 @@ struct LanguageSectionView: View {
     @State private var templateToPublish: Template?
     @State private var showingPublishSheet = false
     @State private var lastUpdateTime = Date()
+    @StateObject private var publishViewModel = PublishTemplateViewModel()
     private let debounceInterval: TimeInterval = 0.5
     
     private let columns = [
@@ -66,7 +67,10 @@ struct LanguageSectionView: View {
                     }
                     
                     Button {
-                        router.navigate(to: .createTemplate(language, nil))
+                        // 获取当前分区的 ID
+                        if let section = try? TemplateStorage.shared.listLanguageSections().first(where: { $0.name == language }) {
+                            router.navigate(to: .createTemplate(section.id ?? "", nil))
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -142,7 +146,11 @@ struct LanguageSectionView: View {
                     .tint(.red)
                     
                     Button {
-                        router.navigate(to: .createTemplate(language, template.id))
+                        // 获取当前分区的 ID
+                        if let section = try? TemplateStorage.shared.listLanguageSections().first(where: { $0.name == language }),
+                           let templateId = template.id {
+                            router.navigate(to: .createTemplate(section.id ?? "", templateId))
+                        }
                     } label: {
                         Label("编辑", systemImage: "pencil")
                     }
@@ -162,7 +170,7 @@ struct LanguageSectionView: View {
                                   VersionUtils.compareVersions(localVersion, cloudVersion) == .orderedDescending {
                             Button {
                                 Task {
-                                    await PublishTemplateViewModel().updateTemplate(template)
+                                    await publishViewModel.updateTemplate(template)
                                     loadTemplates()
                                 }
                             } label: {
@@ -195,7 +203,7 @@ struct LanguageSectionView: View {
                           localVersion > cloudVersion {
                     Button {
                         Task {
-                            await PublishTemplateViewModel().updateTemplate(template)
+                            await publishViewModel.updateTemplate(template)
                             loadTemplates()
                         }
                     } label: {

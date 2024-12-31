@@ -5,7 +5,7 @@ import CoreImage.CIFilterBuiltins
 import CoreData
 
 struct CreateTemplateView: View {
-    let language: String
+    let sectionId: String
     let existingTemplateId: String?
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
@@ -22,6 +22,7 @@ struct CreateTemplateView: View {
     @State private var tags: [String] = []
     @State private var newTag = ""
     @State private var showingCancelAlert = false
+    @State private var sectionName: String = ""
     
     // 用于跟踪初始状态
     @State private var initialTitle = ""
@@ -33,8 +34,8 @@ struct CreateTemplateView: View {
     private let minutesRange = 0...10
     private let secondsRange = 0...59
     
-    init(language: String, existingTemplateId: String? = nil) {
-        self.language = language
+    init(sectionId: String, existingTemplateId: String? = nil) {
+        self.sectionId = sectionId
         self.existingTemplateId = existingTemplateId
     }
     
@@ -134,6 +135,11 @@ struct CreateTemplateView: View {
                 }
             }
             .onAppear {
+                // Load section name
+                if let section = try? TemplateStorage.shared.loadLanguageSection(id: sectionId) {
+                    sectionName = section.name ?? ""
+                }
+                
                 // 打开页面时就创建临时模板
                 if existingTemplateId == nil {
                     do {
@@ -146,7 +152,7 @@ struct CreateTemplateView: View {
                         
                         templateId = try TemplateStorage.shared.createTemplate(
                             title: "",
-                            language: language,
+                            sectionId: sectionId,
                             coverImage: defaultCoverImage
                         )
                         print("✅ Created temporary template: \(templateId ?? "")")

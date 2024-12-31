@@ -8,37 +8,12 @@ struct LocalTemplatesView: View {
     @State private var showingDeleteAlert = false
     @State private var languageToDelete: String?
     @State private var templatesByLanguage: [String: [Template]] = [:]
-    @State private var languageSections: [String] = []
+    @State private var languageSections: [LocalLanguageSection] = []
     
     var body: some View {
         List {
-            ForEach(languageSections, id: \.self) { language in
-                NavigationLink(value: Route.languageSection(language)) {
-                    HStack {
-                        Text(language)
-                            .font(.title3)
-                        Spacer()
-                        Text("\(templatesByLanguage[language]?.count ?? 0)")
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 8)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button {
-                        // 检查该语言分区是否有模板
-                        if let templates = templatesByLanguage[language], !templates.isEmpty {
-                            // 有模板时显示确认对话框
-                            languageToDelete = language
-                            showingDeleteAlert = true
-                        } else {
-                            // 没有模板时直接删除
-                            deleteLanguageSection(language)
-                        }
-                    } label: {
-                        Label("删除", systemImage: "trash")
-                    }
-                    .tint(.red)
-                }
+            ForEach(languageSections, id: \.id) { section in
+                languageSectionRow(section)
             }
         }
         .navigationTitle("本地模板")
@@ -63,8 +38,9 @@ struct LocalTemplatesView: View {
         }
         .confirmationDialog("所有模板和录音记录都将删除。", isPresented: $showingDeleteAlert, titleVisibility: .visible) {
             Button("删除分区", role: .destructive) {
-                if let language = languageToDelete {
-                    deleteLanguageSection(language)
+                if let language = languageToDelete,
+                   let section = languageSections.first(where: { $0.name == language }) {
+                    deleteLanguageSection(section)
                 }
             }
             Button("取消", role: .cancel) {
@@ -76,30 +52,62 @@ struct LocalTemplatesView: View {
         }
     }
     
-    private func loadLanguageSections() {
-        // 从 CoreData 加载语言分区和模板
-        let storage = TemplateStorage.shared
-        languageSections = storage.getLanguageSections()
-        
-        do {
-            templatesByLanguage = try storage.listTemplatesByLanguage()
-        } catch {
-            print("Error loading templates: \(error)")
-            templatesByLanguage = [:]
+    private func languageSectionRow(_ section: LocalLanguageSection) -> some View {
+        NavigationLink(value: Route.languageSection(section.name ?? "")) {
+            HStack {
+                Text(section.name ?? "")
+                    .font(.title3)
+                Spacer()
+                Text("\(section.templates?.count ?? 0)")
+                    .foregroundColor(.secondary)
+            }
+            .padding(.vertical, 8)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                // 检查该语言分区是否有模板
+                if let templates = section.templates,
+                   templates.count > 0 {
+                    // 有模板时显示确认对话框
+                    languageToDelete = section.name
+                    showingDeleteAlert = true
+                } else {
+                    // 没有模板时直接删除
+                    deleteLanguageSection(section)
+                }
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+            .tint(.red)
         }
     }
     
-    private func addLanguageSection(_ language: String) {
-        let storage = TemplateStorage.shared
-        storage.addLanguageSection(language)
-        loadLanguageSections()
+    private func loadLanguageSections() {
+        do {
+            languageSections = try TemplateStorage.shared.listLanguageSections()
+        } catch {
+            print("Error loading language sections: \(error)")
+            languageSections = []
+        }
     }
     
-    private func deleteLanguageSection(_ language: String) {
-        let storage = TemplateStorage.shared
-        storage.deleteLanguageSection(language)
-        loadLanguageSections()
-        languageToDelete = nil
+    private func addLanguageSection(_ name: String) {
+        do {
+            _ = try TemplateStorage.shared.createLanguageSection(name: name)
+            loadLanguageSections()
+        } catch {
+            print("Error adding language section: \(error)")
+        }
+    }
+    
+    private func deleteLanguageSection(_ section: LocalLanguageSection) {
+        do {
+            try TemplateStorage.shared.deleteLanguageSection(section)
+            loadLanguageSections()
+            languageToDelete = nil
+        } catch {
+            print("Error deleting language section: \(error)")
+        }
     }
 }
 

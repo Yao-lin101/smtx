@@ -1,10 +1,16 @@
 import Foundation
 
 enum Route: Hashable, Identifiable {
-    // 模板相关路由
+    /// 语言分区页面
     case languageSection(String)
+    /// 模板详情页面
     case templateDetail(String)
+    /// 创建/编辑模板页面
+    /// - Parameters:
+    ///   - sectionId: 语言分区ID
+    ///   - templateId: 模板ID（编辑时使用）
     case createTemplate(String, String?)
+    /// 录音页面
     case recording(String, String?)
     
     // 云模板相关路由

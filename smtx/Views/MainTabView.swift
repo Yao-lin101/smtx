@@ -37,8 +37,8 @@ struct MainTabView: View {
                             LanguageSectionView(language: language)
                         case .templateDetail(let templateId):
                             TemplateDetailView(templateId: templateId)
-                        case .createTemplate(let language, let templateId):
-                            CreateTemplateView(language: language, existingTemplateId: templateId)
+                        case .createTemplate(let sectionId, let templateId):
+                            CreateTemplateView(sectionId: sectionId, existingTemplateId: templateId)
                         case .recording(let templateId, let recordId):
                             if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId) {
                                 RecordingView(template: template, recordId: recordId)

@@ -94,6 +94,7 @@ struct PublishTemplateView: View {
             }
             .toastManager()
         }
+    }
 }
 
 struct PublishProgressView: View {
