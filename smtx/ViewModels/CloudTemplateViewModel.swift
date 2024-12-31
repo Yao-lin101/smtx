@@ -7,6 +7,7 @@ class CloudTemplateViewModel: ObservableObject {
     private let store = LanguageSectionStore.shared  // 添加 store
     private var hasInitialized = false  // 添加初始化标记
     private var hasLoadedTemplates = false  // 添加新标记
+    private var currentLoadTask: Task<Void, Never>?  // 添加任务引用
     
     // MARK: - Published Properties
     
@@ -131,59 +132,61 @@ class CloudTemplateViewModel: ObservableObject {
     /// 加载模板列表
     /// - Parameter languageSectionUid: 可选的语言分区 UID
     func loadTemplates(languageSectionUid: String? = nil) async {
-        print("🔄 开始加载模板列表")
-        if let uid = languageSectionUid {
-            print("📍 指定语言分区: \(uid)")
-        }
+        // 取消之前的加载任务
+        currentLoadTask?.cancel()
         
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            if let uid = languageSectionUid {
-                print("📤 请求分区模板: \(uid)")
-                templates = try await service.fetchTemplates(languageSectionUid: uid)
-                print("✅ 成功加载分区模板，数量: \(templates.count)")
-            } else {
-                print("📤 请求所有模板")
-                templates = try await service.fetchTemplates()
-                print("✅ 成功加载所有模板，数量: \(templates.count)")
+        // 创建新的加载任务
+        currentLoadTask = Task {
+            isLoading = true
+            errorMessage = nil
+            
+            do {
+                if let uid = languageSectionUid {
+                    templates = try await service.fetchTemplates(languageSectionUid: uid)
+                } else {
+                    templates = try await service.fetchTemplates()
+                }
+            } catch {
+                if !Task.isCancelled {  // 只在非取消情况下显示错误
+                    if let templateError = error as? TemplateError {
+                        errorMessage = templateError.localizedDescription
+                    } else {
+                        errorMessage = error.localizedDescription
+                    }
+                    showError = true
+                }
             }
-        } catch TemplateError.unauthorized {
-            print("❌ 未授权错误")
-            errorMessage = "请先登录"
-            showError = true
-        } catch TemplateError.serverError(let message) {
-            print("❌ 服务器错误: \(message)")
-            errorMessage = message
-            showError = true
-        } catch {
-            print("❌ 加载失败: \(error.localizedDescription)")
-            errorMessage = "加载模板失败"
-            showError = true
+            
+            isLoading = false
         }
         
-        isLoading = false
-        print("🏁 模板加载完成")
+        // 等待任务完成
+        await currentLoadTask?.value
     }
     
     /// 加载多个语言分区的模板
     /// - Parameter languageSectionUids: 语言分区 UID 数组
     func loadTemplates(languageSectionUids: [String]) async {
-        print("🔄 开始加载多个分区的模板")
-        print("📍 分区列表: \(languageSectionUids)")
+        currentLoadTask?.cancel()
         
-        isLoading = true
-        do {
-            templates = try await service.listTemplates(languageSectionUids: languageSectionUids)
-            print("✅ 成功加载多个分区模板，数量: \(templates.count)")
-            isLoading = false
-        } catch {
-            print("❌ 加载失败: \(error.localizedDescription)")
-            errorMessage = error.localizedDescription
-            showError = true
+        currentLoadTask = Task {
+            isLoading = true
+            do {
+                templates = try await service.listTemplates(languageSectionUids: languageSectionUids)
+            } catch {
+                if !Task.isCancelled {
+                    if let templateError = error as? TemplateError {
+                        errorMessage = templateError.localizedDescription
+                    } else {
+                        errorMessage = error.localizedDescription
+                    }
+                    showError = true
+                }
+            }
             isLoading = false
         }
+        
+        await currentLoadTask?.value
     }
     
     func toggleSubscription(for section: LanguageSection) {

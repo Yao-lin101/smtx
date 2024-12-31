@@ -25,6 +25,7 @@ struct CloudTemplatesView: View {
                 contentView
             }
         }
+        .background(Color(.systemGroupedBackground))
         .alert("错误", isPresented: $viewModel.showError) {
             Button("确定", role: .cancel) {}
         } message: {
@@ -139,6 +140,20 @@ struct CloudTemplatesView: View {
                 templateListView
             }
         }
+        .refreshable {
+            // 只刷新当前分区的模板
+            if !selectedLanguageUid.isEmpty {
+                let formattedUid = selectedLanguageUid.replacingOccurrences(of: "-", with: "")
+                await viewModel.loadTemplates(languageSectionUid: formattedUid)
+            } else {
+                let subscribedUids = viewModel.subscribedSections.map { $0.uid.replacingOccurrences(of: "-", with: "") }
+                if !subscribedUids.isEmpty {
+                    await viewModel.loadTemplates(languageSectionUids: subscribedUids)
+                } else {
+                    await viewModel.loadTemplates()
+                }
+            }
+        }
     }
     
     // MARK: - Helper Methods
@@ -220,43 +235,25 @@ struct CloudTemplatesView: View {
         Group {
             switch displayMode {
             case .list:
-                listView
-            case .gallery:
-                galleryView
-            }
-        }
-    }
-    
-    private var listView: some View {
-        List {
-            ForEach(viewModel.filteredTemplates(searchText: searchText)) { template in
-                NavigationLink(value: Route.cloudTemplateDetail(template.uid)) {
-                    CloudTemplateRow(template: template)
-                }
-            }
-        }
-        .listStyle(.plain)
-        .refreshable {
-            Task {
-                await viewModel.loadInitialData(selectedLanguageUid: selectedLanguageUid)
-            }
-        }
-    }
-    
-    private var galleryView: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(viewModel.filteredTemplates(searchText: searchText)) { template in
-                    NavigationLink(value: Route.cloudTemplateDetail(template.uid)) {
-                        CloudTemplateCard(template: template)
+                List {
+                    ForEach(viewModel.filteredTemplates(searchText: searchText)) { template in
+                        NavigationLink(value: Route.cloudTemplateDetail(template.uid)) {
+                            CloudTemplateRow(template: template)
+                        }
                     }
                 }
-            }
-            .padding(16)
-        }
-        .refreshable {
-            Task {
-                await viewModel.loadInitialData(selectedLanguageUid: selectedLanguageUid)
+                .listStyle(.plain)
+            case .gallery:
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(viewModel.filteredTemplates(searchText: searchText)) { template in
+                            NavigationLink(value: Route.cloudTemplateDetail(template.uid)) {
+                                CloudTemplateCard(template: template)
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
             }
         }
     }
