@@ -16,9 +16,24 @@ struct LocalTemplatesView: View {
     @State private var sectionToEdit: LocalLanguageSection?
     
     private var filteredCloudSections: [LanguageSection] {
-        guard !searchText.isEmpty else { return cloudStore.sections }
-        return cloudStore.sections.filter { section in
+        let sections = searchText.isEmpty ? cloudStore.sections : cloudStore.sections.filter { section in
             section.name.localizedCaseInsensitiveContains(searchText)
+        }
+        
+        // 将已绑定的分区排在前面
+        return sections.sorted { section1, section2 in
+            // 如果正在编辑分区
+            if let editingSection = sectionToEdit {
+                let section1IsBound = section1.uid.replacingOccurrences(of: "-", with: "") == editingSection.cloudSectionId
+                let section2IsBound = section2.uid.replacingOccurrences(of: "-", with: "") == editingSection.cloudSectionId
+                
+                if section1IsBound != section2IsBound {
+                    return section1IsBound // 已绑定的排在前面
+                }
+            }
+            
+            // 如果绑定状态相同或没有正在编辑的分区，按名称排序
+            return section1.name < section2.name
         }
     }
     
