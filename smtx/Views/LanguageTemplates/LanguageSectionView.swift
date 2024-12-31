@@ -146,7 +146,6 @@ struct LanguageSectionView: View {
                     .tint(.red)
                     
                     Button {
-                        // 获取当前分区的 ID
                         if let section = try? TemplateStorage.shared.listLanguageSections().first(where: { $0.name == language }),
                            let templateId = template.id {
                             router.navigate(to: .createTemplate(section.id ?? "", templateId))
@@ -159,8 +158,9 @@ struct LanguageSectionView: View {
                     if userStore.isAuthenticated {
                         if template.cloudUid == nil {
                             Button {
-                                templateToPublish = template
-                                showingPublishSheet = true
+                                Task {
+                                    await publishTemplate(template)
+                                }
                             } label: {
                                 Label("发布", systemImage: "square.and.arrow.up")
                             }
@@ -192,8 +192,9 @@ struct LanguageSectionView: View {
             if userStore.isAuthenticated {
                 if template.cloudUid == nil {
                     Button {
-                        templateToPublish = template
-                        showingPublishSheet = true
+                        Task {
+                            await publishTemplate(template)
+                        }
                     } label: {
                         Label("发布", systemImage: "square.and.arrow.up")
                     }
@@ -286,6 +287,21 @@ struct LanguageSectionView: View {
         .cornerRadius(8)
         .padding(.horizontal)
         .padding(.vertical, 8)
+    }
+    
+    private func publishTemplate(_ template: Template) async {
+        // 检查当前分区是否已绑定云端分区
+        if let section = try? TemplateStorage.shared.listLanguageSections().first(where: { $0.name == language }),
+           let cloudSectionId = section.cloudSectionId,
+           let cloudSection = LanguageSectionStore.shared.sections.first(where: { $0.uid == cloudSectionId }) {
+            // 已绑定云端分区，直接发布
+            await publishViewModel.publishTemplate(template, to: cloudSection)
+            loadTemplates()
+        } else {
+            // 未绑定云端分区，显示选择界面
+            templateToPublish = template
+            showingPublishSheet = true
+        }
     }
 }
 
