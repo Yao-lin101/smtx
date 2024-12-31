@@ -99,7 +99,7 @@ class CloudTemplateViewModel: ObservableObject {
             if let section = languageSections.first(where: { $0.uid == selectedLanguageUid }),
                localSubscribedSections.contains(where: { $0.uid == selectedLanguageUid }) {
                 // 如果找到了保存的分区且已订阅，加载该分区的模板
-                await loadTemplates(languageSection: section.name)
+                await loadTemplates(languageSectionUid: section.uid.replacingOccurrences(of: "-", with: ""))
             } else {
                 // 如果找不到保存的分区或未订阅，加载所有模板
                 await loadTemplates()
@@ -110,14 +110,20 @@ class CloudTemplateViewModel: ObservableObject {
         }
     }
     
-    func loadTemplates(languageSection: String? = nil) async {
+    // MARK: - Template Loading
+    
+    /// 加载模板列表
+    /// - Parameter languageSectionUid: 可选的语言分区 UID
+    func loadTemplates(languageSectionUid: String? = nil) async {
         isLoading = true
         errorMessage = nil
         
         do {
-            templates = try await service.fetchTemplates(
-                languageSection: languageSection
-            )
+            if let uid = languageSectionUid {
+                templates = try await service.fetchTemplates(languageSectionUid: uid)
+            } else {
+                templates = try await service.fetchTemplates()
+            }
         } catch TemplateError.unauthorized {
             errorMessage = "请先登录"
             showError = true
@@ -130,6 +136,20 @@ class CloudTemplateViewModel: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    /// 加载多个语言分区的模板
+    /// - Parameter languageSectionUids: 语言分区 UID 数组
+    func loadTemplates(languageSectionUids: [String]) async {
+        isLoading = true
+        do {
+            templates = try await service.listTemplates(languageSectionUids: languageSectionUids)
+            isLoading = false
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+            isLoading = false
+        }
     }
     
     func toggleSubscription(for section: LanguageSection) {

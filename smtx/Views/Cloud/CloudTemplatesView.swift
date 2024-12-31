@@ -75,9 +75,28 @@ struct CloudTemplatesView: View {
             if viewModel.subscribedSections.isEmpty {
                 Text("无")
             } else {
-                Button("全部") { selectLanguage("") }
+                Button {
+                    selectLanguage("")
+                } label: {
+                    HStack {
+                        Text("全部")
+                        if selectedLanguageUid.isEmpty {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                
                 ForEach(viewModel.subscribedSections) { section in
-                    Button(section.name) { selectLanguage(section.uid) }
+                    Button {
+                        selectLanguage(section.uid)
+                    } label: {
+                        HStack {
+                            Text(section.name)
+                            if selectedLanguageUid == section.uid {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -121,10 +140,13 @@ struct CloudTemplatesView: View {
     private func selectLanguage(_ uid: String) {
         selectedLanguageUid = uid
         Task {
-            if let section = viewModel.selectedLanguage(uid: uid) {
-                await viewModel.loadTemplates(languageSection: section.name)
+            if uid.isEmpty {
+                // 加载所有订阅分区的模板
+                let sectionUids = viewModel.subscribedSections.map { $0.uid.replacingOccurrences(of: "-", with: "") }
+                await viewModel.loadTemplates(languageSectionUids: sectionUids)
             } else {
-                await viewModel.loadTemplates()
+                // 加载特定分区的模板，使用 UID
+                await viewModel.loadTemplates(languageSectionUid: uid.replacingOccurrences(of: "-", with: ""))
             }
         }
     }

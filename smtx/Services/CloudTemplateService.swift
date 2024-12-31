@@ -154,10 +154,10 @@ class CloudTemplateService {
         }
     }
     
-    func fetchTemplates(languageSection: String? = nil, search: String? = nil, page: Int = 1) async throws -> [CloudTemplate] {
+    func fetchTemplates(languageSectionUid: String? = nil, search: String? = nil, page: Int = 1) async throws -> [CloudTemplate] {
         var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
-        if let languageSection = languageSection {
-            queryItems.append(URLQueryItem(name: "language_section", value: languageSection))
+        if let languageSectionUid = languageSectionUid {
+            queryItems.append(URLQueryItem(name: "language_section", value: languageSectionUid))
         }
         if let search = search {
             queryItems.append(URLQueryItem(name: "search", value: search))
@@ -284,7 +284,7 @@ class CloudTemplateService {
         let metadataDict: [String: Any] = [
             "user_uid": userUid,
             "title": template.title ?? "",
-            "language_section": languageSection.uid,
+            "language_section": languageSection.uid.replacingOccurrences(of: "-", with: ""),
             "version": template.version ?? "1.0",
             "duration": Int(template.totalDuration),
             "tags": template.tags as? [String] ?? []
@@ -513,5 +513,22 @@ class CloudTemplateService {
             formData,
             progressHandler: progressHandler
         )
+    }
+    
+    func listTemplates(languageSectionUids: [String]) async throws -> [CloudTemplate] {
+        let templates = try await withThrowingTaskGroup(of: [CloudTemplate].self) { group in
+            for uid in languageSectionUids {
+                group.addTask {
+                    return try await self.fetchTemplates(languageSectionUid: uid)
+                }
+            }
+            
+            var allTemplates: [CloudTemplate] = []
+            for try await templates in group {
+                allTemplates.append(contentsOf: templates)
+            }
+            return allTemplates
+        }
+        return templates.sorted { $0.usageCount > $1.usageCount }
     }
 }
