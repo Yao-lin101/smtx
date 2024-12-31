@@ -1,12 +1,17 @@
 import Foundation
+import ObjectiveC
 
 class NetworkService {
     static let shared = NetworkService()
     private let session = URLSession.shared
+    private let uploadSession: URLSession
     private let tokenManager = TokenManager.shared
     private let interceptorManager = NetworkInterceptorManager.shared
     
-    private init() {}
+    private init() {
+        let config = URLSessionConfiguration.default
+        uploadSession = URLSession(configuration: config, delegate: nil, delegateQueue: .main)
+    }
     
     // MARK: - Generic Request Methods
     
@@ -229,7 +234,7 @@ class NetworkService {
     ///   - url: 请求URL
     ///   - formData: MultipartFormData 对象
     /// - Returns: 解码后的响应数据
-    func uploadFormData<T: Decodable>(_ url: String, _ formData: MultipartFormData) async throws -> T {
+    func uploadFormData<T: Decodable>(_ url: String, _ formData: MultipartFormData, progressHandler: ((Double) -> Void)? = nil) async throws -> T {
         var request = URLRequest(url: URL(string: url)!)
         request.httpMethod = "POST"
         request.setValue(formData.contentType, forHTTPHeaderField: "Content-Type")
@@ -239,32 +244,117 @@ class NetworkService {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        request.httpBody = formData.createBody()
+        let body = formData.createBody()
         
-        let (data, response) = try await session.data(for: request)
+        if let progressHandler = progressHandler {
+            return try await withCheckedThrowingContinuation { continuation in
+                let delegate = UploadProgressDelegateContinuation(
+                    progressHandler: progressHandler,
+                    continuation: continuation
+                )
+                
+                let config = URLSessionConfiguration.default
+                let session = URLSession(configuration: config, delegate: delegate, delegateQueue: .main)
+                let task = session.uploadTask(with: request, from: body)
+                task.resume()
+            }
+        } else {
+            request.httpBody = body
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NetworkError.invalidResponse
+            }
+            
+            switch httpResponse.statusCode {
+            case 200...299:
+                do {
+                    return try JSONDecoder().decode(T.self, from: data)
+                } catch {
+                    throw NetworkError.decodingError(error)
+                }
+            case 401:
+                throw NetworkError.unauthorized
+            case 400...499:
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    throw NetworkError.serverError(errorResponse.message)
+                }
+                throw NetworkError.serverError("请求错误")
+            case 500...599:
+                throw NetworkError.serverError("服务器错误")
+            default:
+                throw NetworkError.unknown
+            }
+        }
+    }
+}
+
+class UploadProgressDelegate: NSObject, URLSessionTaskDelegate {
+    private let progressHandler: (Double) -> Void
+    
+    init(progressHandler: @escaping (Double) -> Void) {
+        self.progressHandler = progressHandler
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        let progress = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
+        progressHandler(progress)
+    }
+}
+
+class UploadProgressDelegateContinuation<T: Decodable>: NSObject, URLSessionDataDelegate, URLSessionTaskDelegate {
+    private let continuation: CheckedContinuation<T, Error>
+    private let progressHandler: (Double) -> Void
+    private var receivedData = Data()
+    
+    init(progressHandler: @escaping (Double) -> Void, continuation: CheckedContinuation<T, Error>) {
+        self.progressHandler = progressHandler
+        self.continuation = continuation
+        super.init()
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        let progress = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
+        DispatchQueue.main.async {
+            self.progressHandler(progress)
+        }
+    }
+    
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        receivedData.append(data)
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            continuation.resume(throwing: NetworkError.networkError(error))
+            return
+        }
         
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkError.invalidResponse
+        guard let httpResponse = task.response as? HTTPURLResponse else {
+            continuation.resume(throwing: NetworkError.invalidResponse)
+            return
         }
         
         switch httpResponse.statusCode {
         case 200...299:
             do {
-                return try JSONDecoder().decode(T.self, from: data)
+                let decoded = try JSONDecoder().decode(T.self, from: receivedData)
+                continuation.resume(returning: decoded)
             } catch {
-                throw NetworkError.decodingError(error)
+                continuation.resume(throwing: NetworkError.decodingError(error))
             }
         case 401:
-            throw NetworkError.unauthorized
+            continuation.resume(throwing: NetworkError.unauthorized)
         case 400...499:
-            if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
-                throw NetworkError.serverError(errorResponse.message)
+            if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: receivedData) {
+                continuation.resume(throwing: NetworkError.serverError(errorResponse.message))
+            } else {
+                continuation.resume(throwing: NetworkError.serverError("请求错误"))
             }
-            throw NetworkError.serverError("请求错误")
         case 500...599:
-            throw NetworkError.serverError("服务器错误")
+            continuation.resume(throwing: NetworkError.serverError("服务器错误"))
         default:
-            throw NetworkError.unknown
+            continuation.resume(throwing: NetworkError.unknown)
         }
     }
 } 

@@ -252,7 +252,7 @@ class CloudTemplateService {
     // MARK: - Template Upload
     
     // 上传模板
-    func uploadTemplate(_ template: Template, to languageSection: LanguageSection) async throws -> CloudTemplateUploadResponse {
+    func uploadTemplate(_ template: Template, to languageSection: LanguageSection, progressHandler: ((Double) -> Void)? = nil) async throws -> CloudTemplateUploadResponse {
         guard let userUid = await UserStore.shared.currentUser?.uid else {
             throw TemplateError.unauthorized
         }
@@ -331,7 +331,8 @@ class CloudTemplateService {
         do {
             let response: CloudTemplateUploadResponse = try await networkService.uploadFormData(
                 apiConfig.uploadTemplatePackageURL,
-                formData
+                formData,
+                progressHandler: progressHandler
             )
             return response
         } catch let error as NetworkError {
@@ -352,7 +353,7 @@ class CloudTemplateService {
     
     // MARK: - Template Update
     
-    func updateTemplate(_ template: Template) async throws -> CloudTemplateUploadResponse {
+    func updateTemplate(_ template: Template, progressHandler: ((Double) -> Void)? = nil) async throws -> CloudTemplateUploadResponse {
         guard let cloudUid = template.cloudUid,
               let lastSyncedAt = template.lastSyncedAt else {
             print("❌ Invalid template: missing cloudUid or lastSyncedAt")
@@ -509,7 +510,8 @@ class CloudTemplateService {
         // 8. 发送请求
         return try await networkService.uploadFormData(
             apiConfig.updateTemplatePackageURL(uid: cloudUid),
-            formData
+            formData,
+            progressHandler: progressHandler
         )
     }
 }

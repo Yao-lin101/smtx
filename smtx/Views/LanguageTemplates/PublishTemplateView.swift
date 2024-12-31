@@ -139,8 +139,11 @@ class PublishTemplateViewModel: ObservableObject {
         
         do {
             // 1. 上传模板
-            let response = try await service.uploadTemplate(template, to: section)
-            publishProgress = 1.0
+            let response = try await service.uploadTemplate(template, to: section) { progress in
+                Task { @MainActor in
+                    self.publishProgress = progress
+                }
+            }
             
             // 2. 更新本地模板状态
             try storage.updateCloudStatus(
@@ -167,11 +170,9 @@ class PublishTemplateViewModel: ObservableObject {
             showError = true
         }
         
+        // 确保在最后设置进度和状态
+        publishProgress = 1.0
         isPublishing = false
-    }
-    
-    func updatePublishProgress(_ progress: Double) {
-        publishProgress = progress
     }
     
     func updateTemplate(_ template: Template) async {
@@ -182,8 +183,11 @@ class PublishTemplateViewModel: ObservableObject {
         
         do {
             // 1. 更新模板
-            let response = try await service.updateTemplate(template)
-            publishProgress = 1.0
+            let response = try await service.updateTemplate(template) { progress in
+                Task { @MainActor in
+                    self.publishProgress = progress
+                }
+            }
             
             // 2. 更新本地模板状态
             try storage.updateCloudStatus(
@@ -210,6 +214,8 @@ class PublishTemplateViewModel: ObservableObject {
             showError = true
         }
         
+        // 确保在最后设置进度和状态
+        publishProgress = 1.0
         isPublishing = false
     }
 } 
