@@ -60,10 +60,11 @@ struct LocalTemplatesView: View {
     
     private var addLanguageSectionSheet: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            VStack(spacing: 0) {
                 TextField("语言名称", text: $newLanguage)
                     .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal)
+                    .padding()
+                    .background(Color(.systemGroupedBackground))
                 
                 List {
                     Section("绑定云端分区（可选）") {
@@ -112,10 +113,11 @@ struct LocalTemplatesView: View {
     
     private var editLanguageSectionSheet: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            VStack(spacing: 0) {
                 TextField("语言名称", text: $newLanguage)
                     .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal)
+                    .padding()
+                    .background(Color(.systemGroupedBackground))
                 
                 List {
                     Section("绑定云端分区（可选）") {

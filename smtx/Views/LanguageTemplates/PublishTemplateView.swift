@@ -87,8 +87,8 @@ struct PublishTemplateView: View {
             } message: {
                 Text(viewModel.errorMessage ?? "未知错误")
             }
-            .alert("发布成功", isPresented: $viewModel.showSuccess) {
-                Button("确定") {
+            .onChange(of: viewModel.showSuccess) { success in
+                if success {
                     dismiss()
                 }
             }
