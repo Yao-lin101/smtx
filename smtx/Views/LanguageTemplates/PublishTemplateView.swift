@@ -61,13 +61,9 @@ struct PublishTemplateView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("发布") {
-                        Task {
-                            if template.cloudUid != nil {
-                                // 如果已有云端 ID，执行增量更新
-                                await viewModel.updateTemplate(template)
-                            } else {
-                                // 否则执行首次发布
-                                await viewModel.publishTemplate(template, to: selectedSection!)
+                        if let selectedSection = selectedSection {
+                            Task {
+                                await viewModel.publishTemplate(template, to: selectedSection)
                             }
                         }
                     }

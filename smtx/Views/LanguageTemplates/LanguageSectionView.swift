@@ -165,6 +165,7 @@ struct LanguageSectionView: View {
                                 Label("发布", systemImage: "square.and.arrow.up")
                             }
                             .tint(.orange)
+                            .disabled(publishViewModel.isPublishing)
                         } else if let cloudVersion = template.cloudVersion,
                                   let localVersion = template.version,
                                   VersionUtils.compareVersions(localVersion, cloudVersion) == .orderedDescending {
@@ -177,6 +178,7 @@ struct LanguageSectionView: View {
                                 Label("发布更新", systemImage: "square.and.arrow.up")
                             }
                             .tint(.orange)
+                            .disabled(publishViewModel.isPublishing)
                         }
                     }
                 }
@@ -198,6 +200,7 @@ struct LanguageSectionView: View {
                     } label: {
                         Label("发布", systemImage: "square.and.arrow.up")
                     }
+                    .disabled(publishViewModel.isPublishing)
                 } else if let localVersion = template.version,
                           let cloudVersion = template.cloudVersion,
                           let _ = template.cloudUid,
@@ -210,6 +213,7 @@ struct LanguageSectionView: View {
                     } label: {
                         Label("发布更新", systemImage: "square.and.arrow.up")
                     }
+                    .disabled(publishViewModel.isPublishing)
                 }
             }
             
