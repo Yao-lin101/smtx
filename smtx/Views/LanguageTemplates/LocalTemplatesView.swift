@@ -31,7 +31,13 @@ struct LocalTemplatesView: View {
         .navigationTitle("本地模板")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: { showingLanguageInput = true }) {
+                Button(action: {
+                    // 重置所有状态
+                    newLanguage = ""
+                    selectedCloudSection = nil
+                    sectionToEdit = nil  // 重置编辑状态
+                    showingLanguageInput = true
+                }) {
                     Image(systemName: "plus")
                 }
             }
@@ -179,12 +185,24 @@ struct LocalTemplatesView: View {
             VStack(alignment: .leading) {
                 Text(section.name)
                     .font(.headline)
+                if !section.chineseName.isEmpty {
+                    Text(section.chineseName)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
                 Text("\(section.templatesCount) 个模板")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
+            
+            if let editingSection = sectionToEdit,
+               section.uid.replacingOccurrences(of: "-", with: "") == editingSection.cloudSectionId {
+                Text("已绑定")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
             
             if selectedCloudSection == section {
                 Image(systemName: "checkmark.circle.fill")
@@ -233,7 +251,12 @@ struct LocalTemplatesView: View {
     
     private func updateLanguageSection(_ section: LocalLanguageSection, newName: String, cloudSectionId: String?) {
         do {
-            try TemplateStorage.shared.updateLanguageSection(id: section.id ?? "", name: newName, cloudSectionId: cloudSectionId)
+            let formattedCloudId = cloudSectionId?.replacingOccurrences(of: "-", with: "")
+            try TemplateStorage.shared.updateLanguageSection(
+                id: section.id ?? "", 
+                name: newName, 
+                cloudSectionId: formattedCloudId
+            )
             loadLanguageSections()
         } catch {
             print("Error updating language section: \(error)")
@@ -251,7 +274,8 @@ struct LocalTemplatesView: View {
     
     private func addLanguageSection(_ name: String, cloudSectionId: String?) {
         do {
-            _ = try TemplateStorage.shared.createLanguageSection(name: name, cloudSectionId: cloudSectionId)
+            let formattedCloudId = cloudSectionId?.replacingOccurrences(of: "-", with: "")
+            _ = try TemplateStorage.shared.createLanguageSection(name: name, cloudSectionId: formattedCloudId)
             loadLanguageSections()
         } catch {
             print("Error adding language section: \(error)")
