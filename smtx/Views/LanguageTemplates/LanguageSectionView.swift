@@ -51,9 +51,37 @@ struct LanguageSectionView: View {
                 
                 switch displayMode {
                 case .list:
-                    listView
+                    ZStack {
+                        listView
+                        
+                        if publishViewModel.isPublishing {
+                            VStack {
+                                Spacer()
+                                HStack {
+                                    Spacer()
+                                    PublishingProgressBar(progress: publishViewModel.publishProgress)
+                                    Spacer()
+                                }
+                                .padding(.bottom, 20)
+                            }
+                        }
+                    }
                 case .gallery:
-                    galleryView
+                    ZStack {
+                        galleryView
+                        
+                        if publishViewModel.isPublishing {
+                            VStack {
+                                Spacer()
+                                HStack {
+                                    Spacer()
+                                    PublishingProgressBar(progress: publishViewModel.publishProgress)
+                                    Spacer()
+                                }
+                                .padding(.bottom, 20)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -106,6 +134,16 @@ struct LanguageSectionView: View {
         }
         .sheet(item: $templateToPublish) { template in
             PublishTemplateView(template: template)
+        }
+        .alert("错误", isPresented: $publishViewModel.showError) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(publishViewModel.errorMessage ?? "未知错误")
+        }
+        .onChange(of: publishViewModel.showSuccess) { success in
+            if success {
+                loadTemplates()
+            }
         }
         .toastManager()
     }
@@ -307,6 +345,12 @@ struct LanguageSectionView: View {
             showingPublishSheet = true
         }
     }
+    
+    private func updateTemplate(_ template: Template) {
+        Task {
+            await publishViewModel.updateTemplate(template)
+        }
+    }
 }
 
 // MARK: - Helper Views
@@ -457,6 +501,29 @@ private struct GalleryTemplateRow: View {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// 添加新的进度条视图组件
+struct PublishingProgressBar: View {
+    let progress: Double
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView(value: progress, total: 1.0)
+                .progressViewStyle(.linear)
+                .tint(.accentColor)
+                .frame(width: 200)
+            
+            Text(String(format: "%.0f%%", progress * 100))
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+        .cornerRadius(20)
+        .shadow(radius: 4)
     }
 }
 
