@@ -271,20 +271,32 @@ struct CloudTemplatesView: View {
 
 struct CloudTemplateRow: View {
     let template: CloudTemplate
+    @State private var coverImage: UIImage?
     
     var body: some View {
         HStack(spacing: 12) {
             // 封面图片
-            AsyncImage(url: URL(string: template.coverThumbnail)) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 120, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            } placeholder: {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: 120, height: 90)
+            Group {
+                if let image = coverImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 120, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(width: 120, height: 90)
+                }
+            }
+            .task {
+                if let url = URL(string: template.coverThumbnail) {
+                    do {
+                        coverImage = try await ImageCacheManager.shared.loadImage(from: url)
+                    } catch {
+                        print("Error loading image: \(error)")
+                    }
+                }
             }
             
             VStack(alignment: .leading, spacing: 8) {
@@ -348,19 +360,33 @@ struct CloudTemplateRow: View {
 
 struct CloudTemplateCard: View {
     let template: CloudTemplate
+    @State private var coverImage: UIImage?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // 封面图片
-            AsyncImage(url: URL(string: template.coverThumbnail)) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            } placeholder: {
-                Color.gray.opacity(0.2)
+            Group {
+                if let image = coverImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 120)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 120)
+                }
             }
-            .frame(height: 120)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .task {
+                if let url = URL(string: template.coverThumbnail) {
+                    do {
+                        coverImage = try await ImageCacheManager.shared.loadImage(from: url)
+                    } catch {
+                        print("Error loading image: \(error)")
+                    }
+                }
+            }
             
             // 标题区域 - 固定两行高度
             Text(template.title)
