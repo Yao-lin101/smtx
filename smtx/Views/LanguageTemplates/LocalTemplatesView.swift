@@ -4,11 +4,23 @@ import CoreData
 struct LocalTemplatesView: View {
     @EnvironmentObject private var router: NavigationRouter
     @State private var showingLanguageInput = false
+    @State private var showingEditSheet = false
     @State private var newLanguage = ""
     @State private var showingDeleteAlert = false
     @State private var languageToDelete: String?
     @State private var templatesByLanguage: [String: [Template]] = [:]
     @State private var languageSections: [LocalLanguageSection] = []
+    @StateObject private var cloudStore = LanguageSectionStore.shared
+    @State private var selectedCloudSection: LanguageSection?
+    @State private var searchText = ""
+    @State private var sectionToEdit: LocalLanguageSection?
+    
+    private var filteredCloudSections: [LanguageSection] {
+        guard !searchText.isEmpty else { return cloudStore.sections }
+        return cloudStore.sections.filter { section in
+            section.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
     
     var body: some View {
         List {
@@ -24,17 +36,11 @@ struct LocalTemplatesView: View {
                 }
             }
         }
-        .alert("添加语言分区", isPresented: $showingLanguageInput) {
-            TextField("语言名称", text: $newLanguage)
-            Button("取消", role: .cancel) {
-                newLanguage = ""
-            }
-            Button("添加") {
-                if !newLanguage.isEmpty {
-                    addLanguageSection(newLanguage)
-                    newLanguage = ""
-                }
-            }
+        .sheet(isPresented: $showingLanguageInput) {
+            addLanguageSectionSheet
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            editLanguageSectionSheet
         }
         .confirmationDialog("所有模板和录音记录都将删除。", isPresented: $showingDeleteAlert, titleVisibility: .visible) {
             Button("删除分区", role: .destructive) {
@@ -49,6 +55,139 @@ struct LocalTemplatesView: View {
         }
         .onAppear {
             loadLanguageSections()
+        }
+    }
+    
+    private var addLanguageSectionSheet: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                TextField("语言名称", text: $newLanguage)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                
+                List {
+                    Section("绑定云端分区（可选）") {
+                        ForEach(filteredCloudSections) { section in
+                            Button {
+                                selectedCloudSection = selectedCloudSection == section ? nil : section
+                                if selectedCloudSection == section {
+                                    newLanguage = section.name
+                                }
+                            } label: {
+                                cloudSectionRow(section)
+                            }
+                            .foregroundColor(.primary)
+                        }
+                    }
+                }
+                .searchable(text: $searchText, prompt: "搜索云端分区")
+            }
+            .navigationTitle("添加语言分区")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        newLanguage = ""
+                        selectedCloudSection = nil
+                        showingLanguageInput = false
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("添加") {
+                        if !newLanguage.isEmpty {
+                            addLanguageSection(newLanguage, cloudSectionId: selectedCloudSection?.uid)
+                            newLanguage = ""
+                            selectedCloudSection = nil
+                            showingLanguageInput = false
+                        }
+                    }
+                    .disabled(newLanguage.isEmpty)
+                }
+            }
+            .task {
+                await cloudStore.loadSections()
+            }
+        }
+    }
+    
+    private var editLanguageSectionSheet: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                TextField("语言名称", text: $newLanguage)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                
+                List {
+                    Section("绑定云端分区（可选）") {
+                        ForEach(filteredCloudSections) { section in
+                            Button {
+                                selectedCloudSection = selectedCloudSection == section ? nil : section
+                                if selectedCloudSection == section {
+                                    newLanguage = section.name
+                                }
+                            } label: {
+                                cloudSectionRow(section)
+                            }
+                            .foregroundColor(.primary)
+                        }
+                    }
+                }
+                .searchable(text: $searchText, prompt: "搜索云端分区")
+            }
+            .navigationTitle("编辑语言分区")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        newLanguage = ""
+                        selectedCloudSection = nil
+                        sectionToEdit = nil
+                        showingEditSheet = false
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") {
+                        if !newLanguage.isEmpty, let section = sectionToEdit {
+                            updateLanguageSection(section, newName: newLanguage, cloudSectionId: selectedCloudSection?.uid)
+                            newLanguage = ""
+                            selectedCloudSection = nil
+                            sectionToEdit = nil
+                            showingEditSheet = false
+                        }
+                    }
+                    .disabled(newLanguage.isEmpty)
+                }
+            }
+            .task {
+                await cloudStore.loadSections()
+            }
+            .onAppear {
+                if let section = sectionToEdit {
+                    newLanguage = section.name ?? ""
+                    if let cloudSectionId = section.cloudSectionId {
+                        selectedCloudSection = cloudStore.sections.first { $0.uid == cloudSectionId }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func cloudSectionRow(_ section: LanguageSection) -> some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(section.name)
+                    .font(.headline)
+                Text("\(section.templatesCount) 个模板")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            if selectedCloudSection == section {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.accentColor)
+            }
         }
     }
     
@@ -79,6 +218,23 @@ struct LocalTemplatesView: View {
                 Label("删除", systemImage: "trash")
             }
             .tint(.red)
+            
+            Button {
+                sectionToEdit = section
+                showingEditSheet = true
+            } label: {
+                Label("编辑", systemImage: "pencil")
+            }
+            .tint(.blue)
+        }
+    }
+    
+    private func updateLanguageSection(_ section: LocalLanguageSection, newName: String, cloudSectionId: String?) {
+        do {
+            try TemplateStorage.shared.updateLanguageSection(id: section.id ?? "", name: newName, cloudSectionId: cloudSectionId)
+            loadLanguageSections()
+        } catch {
+            print("Error updating language section: \(error)")
         }
     }
     
@@ -91,9 +247,9 @@ struct LocalTemplatesView: View {
         }
     }
     
-    private func addLanguageSection(_ name: String) {
+    private func addLanguageSection(_ name: String, cloudSectionId: String?) {
         do {
-            _ = try TemplateStorage.shared.createLanguageSection(name: name)
+            _ = try TemplateStorage.shared.createLanguageSection(name: name, cloudSectionId: cloudSectionId)
             loadLanguageSections()
         } catch {
             print("Error adding language section: \(error)")
