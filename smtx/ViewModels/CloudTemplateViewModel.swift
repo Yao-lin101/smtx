@@ -6,6 +6,7 @@ class CloudTemplateViewModel: ObservableObject {
     private let service = CloudTemplateService.shared
     private let store = LanguageSectionStore.shared  // 添加 store
     private var hasInitialized = false  // 添加初始化标记
+    private var hasLoadedTemplates = false  // 添加新标记
     
     // MARK: - Published Properties
     
@@ -316,11 +317,30 @@ class CloudTemplateViewModel: ObservableObject {
         do {
             // 从云端获取订阅的语言分区
             let sections = try await CloudTemplateService.shared.fetchLanguageSections()
-            // 更新 store 的数据，而不是更新 viewModel 的数据
-            await store.updateSections(sections)
+            // 更新 store 的数据，不需要 await
+            store.updateSections(sections)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+    
+    // 添加新方法
+    func loadInitialTemplates(selectedLanguageUid: String) async {
+        guard !hasLoadedTemplates else { return }
+        
+        if !selectedLanguageUid.isEmpty {
+            let formattedUid = selectedLanguageUid.replacingOccurrences(of: "-", with: "")
+            await loadTemplates(languageSectionUid: formattedUid)
+        } else {
+            let subscribedUids = subscribedSections.map { $0.uid.replacingOccurrences(of: "-", with: "") }
+            if !subscribedUids.isEmpty {
+                await loadTemplates(languageSectionUids: subscribedUids)
+            } else {
+                await loadTemplates()
+            }
+        }
+        
+        hasLoadedTemplates = true
     }
 } 

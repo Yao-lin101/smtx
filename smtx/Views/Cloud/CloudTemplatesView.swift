@@ -36,7 +36,11 @@ struct CloudTemplatesView: View {
             SubscribeLanguageView(searchText: $searchText)
         }
         .task {
+            // 1. 加载分区数据
             viewModel.loadLocalData()
+            
+            // 2. 只在第一次加载模板
+            await viewModel.loadInitialTemplates(selectedLanguageUid: selectedLanguageUid)
         }
         .onChange(of: viewModel.subscribedSections) { sections in
             handleSubscriptionChange(sections)
