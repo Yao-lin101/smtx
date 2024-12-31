@@ -343,16 +343,19 @@ struct CreateTemplateView: View {
                 // 查找现有项目或创建新项目
                 let item = existingItems.first(where: { $0.timestamp == itemData.timestamp }) ?? TimelineItem(context: template.managedObjectContext!)
                 
-                // 更新项目属性
-                item.id = UUID().uuidString
+                // 更新基本属性
+                if item.id == nil {
+                    item.id = UUID().uuidString
+                }
                 item.timestamp = itemData.timestamp
                 
-                // 只在脚本确实变化时更新updatedAt
+                var wasUpdated = false
+                
+                // 只在脚本确实变化时更新
                 if item.script != itemData.script {
                     item.script = itemData.script
                     item.updatedAt = Date()
-                } else {
-                    item.script = itemData.script
+                    wasUpdated = true
                 }
                 
                 // 只在图片确实变化时更新图片数据和imageUpdatedAt
@@ -370,16 +373,26 @@ struct CreateTemplateView: View {
                         print("  - Image data changed, updating imageUpdatedAt")
                         item.image = itemData.imageData
                         item.imageUpdatedAt = Date()
+                        item.updatedAt = Date()  // 同时更新 updatedAt
+                        wasUpdated = true
                         print("  - New imageUpdatedAt: \(item.imageUpdatedAt?.description ?? "nil")")
                     } else {
                         print("  - Image data unchanged, keeping original imageUpdatedAt")
                     }
                 }
                 
-                item.createdAt = itemData.createdAt
+                // 只在新创建项目时设置 createdAt
+                if item.createdAt == nil {
+                    item.createdAt = itemData.createdAt
+                    wasUpdated = true
+                }
+                
                 item.template = template
                 
-                print("  - Updated timeline item: timestamp=\(itemData.timestamp), updatedAt=\(item.updatedAt ?? Date())")
+                // 只打印真正更新的项目
+                if wasUpdated {
+                    print("  - Updated timeline item: timestamp=\(itemData.timestamp), updatedAt=\(item.updatedAt?.description ?? "nil")")
+                }
             }
             
             // 删除不再使用的项目
