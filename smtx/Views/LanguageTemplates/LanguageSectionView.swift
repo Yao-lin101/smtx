@@ -103,6 +103,7 @@ struct LanguageSectionView: View {
         .sheet(item: $templateToPublish) { template in
             PublishTemplateView(template: template)
         }
+        .toastManager()
     }
     
     private var galleryView: some View {

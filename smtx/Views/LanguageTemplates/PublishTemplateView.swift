@@ -92,8 +92,8 @@ struct PublishTemplateView: View {
                     dismiss()
                 }
             }
+            .toastManager()
         }
-    }
 }
 
 struct PublishProgressView: View {
@@ -126,6 +126,7 @@ struct PublishProgressView: View {
 class PublishTemplateViewModel: ObservableObject {
     private let service = CloudTemplateService.shared
     private let storage = TemplateStorage.shared
+    private let toast = ToastManager.shared
     
     @Published private(set) var isPublishing = false
     @Published private(set) var publishProgress = 0.0
@@ -158,6 +159,7 @@ class PublishTemplateViewModel: ObservableObject {
             }
             
             // 4. 显示成功提示
+            toast.show("发布成功", type: .success)
             showSuccess = true
         } catch {
             if let templateError = error as? TemplateError {
@@ -199,6 +201,7 @@ class PublishTemplateViewModel: ObservableObject {
             }
             
             // 4. 显示成功提示
+            toast.show("更新成功", type: .success)
             showSuccess = true
         } catch {
             if let templateError = error as? TemplateError {
@@ -206,6 +209,7 @@ class PublishTemplateViewModel: ObservableObject {
             } else {
                 errorMessage = error.localizedDescription
             }
+            toast.show("更新失败：\(errorMessage ?? "未知错误")", type: .error)
             showError = true
         }
         
