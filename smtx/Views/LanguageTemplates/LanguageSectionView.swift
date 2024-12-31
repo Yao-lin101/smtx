@@ -334,10 +334,9 @@ struct LanguageSectionView: View {
     private func publishTemplate(_ template: Template) async {
         // 检查当前分区是否已绑定云端分区
         if let section = try? TemplateStorage.shared.listLanguageSections().first(where: { $0.name == language }),
-           let cloudSectionId = section.cloudSectionId,
-           let cloudSection = LanguageSectionStore.shared.sections.first(where: { $0.uid == cloudSectionId }) {
+           let cloudSectionId = section.cloudSectionId{
             // 已绑定云端分区，直接发布
-            await publishViewModel.publishTemplate(template, to: cloudSection)
+            await publishViewModel.publishTemplate(template, to: cloudSectionId)
             loadTemplates()
         } else {
             // 未绑定云端分区，显示选择界面

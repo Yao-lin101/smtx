@@ -63,7 +63,7 @@ struct PublishTemplateView: View {
                     Button("发布") {
                         if let selectedSection = selectedSection {
                             Task {
-                                await viewModel.publishTemplate(template, to: selectedSection)
+                                await viewModel.publishTemplate(template, to: selectedSection.uid)
                             }
                         }
                     }
@@ -131,7 +131,7 @@ class PublishTemplateViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showSuccess = false
     
-    func publishTemplate(_ template: Template, to section: LanguageSection) async {
+    func publishTemplate(_ template: Template, to sectionUid: String) async {
         isPublishing = true
         publishProgress = 0.0
         showError = false
@@ -139,7 +139,7 @@ class PublishTemplateViewModel: ObservableObject {
         
         do {
             // 1. 上传模板
-            let response = try await service.uploadTemplate(template, to: section) { progress in
+            let response = try await service.uploadTemplate(template, to: sectionUid) { progress in
                 Task { @MainActor in
                     self.publishProgress = progress
                 }

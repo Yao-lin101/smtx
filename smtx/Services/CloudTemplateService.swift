@@ -264,7 +264,7 @@ class CloudTemplateService {
     // MARK: - Template Upload
     
     // 上传模板
-    func uploadTemplate(_ template: Template, to languageSection: LanguageSection, progressHandler: ((Double) -> Void)? = nil) async throws -> CloudTemplateUploadResponse {
+    func uploadTemplate(_ template: Template, to languageSectionUid: String, progressHandler: ((Double) -> Void)? = nil) async throws -> CloudTemplateUploadResponse {
         guard let userUid = await UserStore.shared.currentUser?.uid else {
             throw TemplateError.unauthorized
         }
@@ -296,7 +296,7 @@ class CloudTemplateService {
         let metadataDict: [String: Any] = [
             "user_uid": userUid,
             "title": template.title ?? "",
-            "language_section": languageSection.uid.replacingOccurrences(of: "-", with: ""),
+            "language_section": languageSectionUid.replacingOccurrences(of: "-", with: ""),
             "version": template.version ?? "1.0",
             "duration": Int(template.totalDuration),
             "tags": template.tags as? [String] ?? []
