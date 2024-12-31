@@ -15,9 +15,73 @@ class NetworkService {
     
     // MARK: - Generic Request Methods
     
-    func get<T: Decodable>(_ url: String, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
-        let request = try await createRequest(url: url, method: "GET", requiresAuth: requiresAuth)
-        return try await performRequest(request, decoder: decoder)
+    func get<T: Decodable>(_ urlString: String, decoder: JSONDecoder? = nil) async throws -> T {
+        print("📡 GET 请求: \(urlString)")
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ 无效的 URL: \(urlString)")
+            throw NetworkError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        if let token = tokenManager.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            print("🔑 添加认证令牌")
+        }
+        
+        do {
+            print("📥 开始网络请求")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ 非 HTTP 响应")
+                throw NetworkError.invalidResponse
+            }
+            
+            print("📦 收到响应: HTTP \(httpResponse.statusCode)")
+            
+            // 打印响应数据用于调试
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("📄 响应数据: \(jsonString)")
+            }
+            
+            switch httpResponse.statusCode {
+            case 200...299:
+                do {
+                    print("🔄 开始解码数据")
+                    let decodedData = try (decoder ?? JSONDecoder()).decode(T.self, from: data)
+                    print("✅ 数据解码成功")
+                    return decodedData
+                } catch let error {
+                    print("❌ 解码错误: \(error)")
+                    throw NetworkError.decodingError(error)
+                }
+            case 401:
+                print("🔒 未授权错误 (401)")
+                throw NetworkError.unauthorized
+            case 400...499:
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    print("⚠️ 客户端错误: \(errorResponse.message)")
+                    throw NetworkError.serverError(errorResponse.message)
+                }
+                print("⚠️ 未知客户端错误")
+                throw NetworkError.serverError("请求失败")
+            case 500...599:
+                print("⚠️ 服务器错误")
+                throw NetworkError.serverError("服务器错误")
+            default:
+                print("❓ 未知状态码: \(httpResponse.statusCode)")
+                throw NetworkError.serverError("未知错误")
+            }
+        } catch {
+            if let networkError = error as? NetworkError {
+                throw networkError
+            }
+            print("🌐 网络请求错误: \(error.localizedDescription)")
+            throw NetworkError.networkError(error)
+        }
     }
     
     func post<T: Decodable, B: Encodable>(_ url: String, body: B, decoder: JSONDecoder = JSONDecoder(), requiresAuth: Bool = true) async throws -> T {
@@ -286,6 +350,27 @@ class NetworkService {
                 throw NetworkError.unknown
             }
         }
+    }
+    
+    private func handleDecodingError(_ error: Error, data: Data) -> NetworkError {
+        print("❌ 解码错误详情:")
+        print("  - 错误: \(error)")
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("  - 原始数据: \(jsonString)")
+        }
+        if let decodingError = error as? DecodingError {
+            switch decodingError {
+            case .keyNotFound(let key, let context):
+                print("  - 缺失键: \(key)")
+                print("  - 上下文: \(context)")
+            case .typeMismatch(let type, let context):
+                print("  - 类型不匹配: 期望 \(type)")
+                print("  - 上下文: \(context)")
+            default:
+                print("  - 其他解码错误: \(decodingError)")
+            }
+        }
+        return NetworkError.decodingError(error)
     }
 }
 

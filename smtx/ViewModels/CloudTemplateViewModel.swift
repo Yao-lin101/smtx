@@ -115,37 +115,55 @@ class CloudTemplateViewModel: ObservableObject {
     /// 加载模板列表
     /// - Parameter languageSectionUid: 可选的语言分区 UID
     func loadTemplates(languageSectionUid: String? = nil) async {
+        print("🔄 开始加载模板列表")
+        if let uid = languageSectionUid {
+            print("📍 指定语言分区: \(uid)")
+        }
+        
         isLoading = true
         errorMessage = nil
         
         do {
             if let uid = languageSectionUid {
+                print("📤 请求分区模板: \(uid)")
                 templates = try await service.fetchTemplates(languageSectionUid: uid)
+                print("✅ 成功加载分区模板，数量: \(templates.count)")
             } else {
+                print("📤 请求所有模板")
                 templates = try await service.fetchTemplates()
+                print("✅ 成功加载所有模板，数量: \(templates.count)")
             }
         } catch TemplateError.unauthorized {
+            print("❌ 未授权错误")
             errorMessage = "请先登录"
             showError = true
         } catch TemplateError.serverError(let message) {
+            print("❌ 服务器错误: \(message)")
             errorMessage = message
             showError = true
         } catch {
+            print("❌ 加载失败: \(error.localizedDescription)")
             errorMessage = "加载模板失败"
             showError = true
         }
         
         isLoading = false
+        print("🏁 模板加载完成")
     }
     
     /// 加载多个语言分区的模板
     /// - Parameter languageSectionUids: 语言分区 UID 数组
     func loadTemplates(languageSectionUids: [String]) async {
+        print("🔄 开始加载多个分区的模板")
+        print("📍 分区列表: \(languageSectionUids)")
+        
         isLoading = true
         do {
             templates = try await service.listTemplates(languageSectionUids: languageSectionUids)
+            print("✅ 成功加载多个分区模板，数量: \(templates.count)")
             isLoading = false
         } catch {
+            print("❌ 加载失败: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             showError = true
             isLoading = false

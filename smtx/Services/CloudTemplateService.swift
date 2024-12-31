@@ -155,33 +155,45 @@ class CloudTemplateService {
     }
     
     func fetchTemplates(languageSectionUid: String? = nil, search: String? = nil, page: Int = 1) async throws -> [CloudTemplate] {
+        print("📡 准备请求模板列表")
         var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
         if let languageSectionUid = languageSectionUid {
             queryItems.append(URLQueryItem(name: "language_section", value: languageSectionUid))
+            print("📍 添加语言分区参数: \(languageSectionUid)")
         }
         if let search = search {
             queryItems.append(URLQueryItem(name: "search", value: search))
+            print("🔍 添加搜索参数: \(search)")
         }
         
         let urlString = apiConfig.templatesURL + "?" + queryItems.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
+        print("🌐 请求URL: \(urlString)")
         
         do {
+            print("📥 开始网络请求")
             let response: PaginatedResponse<CloudTemplate> = try await networkService.get(
                 urlString,
                 decoder: DateDecoder.decoder
             )
+            print("✅ 请求成功，返回模板数量: \(response.results.count)")
             return response.results
         } catch let error as NetworkError {
+            print("❌ 网络错误: \(error)")
             switch error {
             case .serverError(let message):
+                print("⚠️ 服务器错误: \(message)")
                 throw TemplateError.serverError(message)
             case .unauthorized:
+                print("🔒 未授权错误")
                 throw TemplateError.unauthorized
             case .networkError(let error):
+                print("🌐 网络错误: \(error.localizedDescription)")
                 throw TemplateError.networkError(error.localizedDescription)
             case .decodingError:
+                print("📦 解码错误")
                 throw TemplateError.decodingError
             default:
+                print("❓ 未知错误")
                 throw TemplateError.operationFailed("获取模板列表失败")
             }
         }
@@ -516,19 +528,30 @@ class CloudTemplateService {
     }
     
     func listTemplates(languageSectionUids: [String]) async throws -> [CloudTemplate] {
+        print("📡 开始加载多个分区的模板")
+        print("📍 分区列表: \(languageSectionUids)")
+        
         let templates = try await withThrowingTaskGroup(of: [CloudTemplate].self) { group in
             for uid in languageSectionUids {
                 group.addTask {
+                    print("📤 请求分区 \(uid) 的模板")
                     return try await self.fetchTemplates(languageSectionUid: uid)
                 }
             }
             
             var allTemplates: [CloudTemplate] = []
             for try await templates in group {
+                print("✅ 成功接收一个分区的模板，数量: \(templates.count)")
                 allTemplates.append(contentsOf: templates)
             }
+            print("🔄 合并所有模板，总数量: \(allTemplates.count)")
             return allTemplates
         }
-        return templates.sorted { $0.usageCount > $1.usageCount }
+        
+        let sortedTemplates = templates.sorted { (template, otherTemplate) -> Bool in
+            (template.usageCount ?? 0) > (otherTemplate.usageCount ?? 0)
+        }
+        print("✅ 完成模板排序，返回结果")
+        return sortedTemplates
     }
 }

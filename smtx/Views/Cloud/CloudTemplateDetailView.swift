@@ -29,7 +29,7 @@ struct CloudTemplateDetailView: View {
                             .bold()
                         
                         HStack {
-                            Text("作者：\(template.authorName)")
+                            Text("作者：\(template.authorName ?? "未知")")
                                 .foregroundColor(.secondary)
                             Spacer()
                             Text(formatDate(template.createdAt))
@@ -63,24 +63,24 @@ struct CloudTemplateDetailView: View {
                             viewModel.likeTemplate(uid: template.uid)
                         } label: {
                             VStack(spacing: 4) {
-                                Image(systemName: template.isLiked ? "heart.fill" : "heart")
+                                Image(systemName: template.isLiked ?? false ? "heart.fill" : "heart")
                                     .font(.title2)
-                                Text("\(template.likesCount)")
+                                Text("\(template.likesCount ?? 0)")
                                     .font(.caption)
                             }
-                            .foregroundColor(template.isLiked ? .red : .primary)
+                            .foregroundColor(template.isLiked ?? false ? .red : .primary)
                         }
                         
                         Button {
                             viewModel.collectTemplate(uid: template.uid)
                         } label: {
                             VStack(spacing: 4) {
-                                Image(systemName: template.isCollected ? "star.fill" : "star")
+                                Image(systemName: template.isCollected ?? false ? "star.fill" : "star")
                                     .font(.title2)
-                                Text("\(template.collectionsCount)")
+                                Text("\(template.collectionsCount ?? 0)")
                                     .font(.caption)
                             }
-                            .foregroundColor(template.isCollected ? .yellow : .primary)
+                            .foregroundColor(template.isCollected ?? false ? .yellow : .primary)
                         }
                         
                         Spacer()

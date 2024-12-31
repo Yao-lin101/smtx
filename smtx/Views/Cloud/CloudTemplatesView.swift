@@ -271,45 +271,75 @@ struct CloudTemplateRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // 缩略图
+            // 封面图片
             AsyncImage(url: URL(string: template.coverThumbnail)) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
+                    .frame(width: 120, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
             } placeholder: {
-                Color.gray.opacity(0.2)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(width: 120, height: 90)
             }
-            .frame(width: 60, height: 60)
-            .cornerRadius(8)
             
-            // 信息
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
+                // 标题
                 Text(template.title)
                     .font(.headline)
+                    .lineLimit(2)
                 
-                HStack {
-                    Image(systemName: "tag")
+                HStack(alignment: .center, spacing: 8) {
+                    // 时长
+                    Text(formatDuration(template.duration))
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
-                    Text(template.tags.joined(separator: ", "))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+                    
+                    if !template.tags.isEmpty {
+                        // 分隔点
+                        Circle()
+                            .fill(Color.secondary)
+                            .frame(width: 3, height: 3)
+                        
+                        // 第一个标签
+                        Text(template.tags[0])
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.1))
+                            .foregroundColor(.accentColor)
+                            .clipShape(Capsule())
+                            .lineLimit(1)
+                    }
                 }
-                .font(.caption)
-            }
-            
-            Spacer()
-            
-            // 使用次数
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("\(template.usageCount)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("使用")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                
+                // 剩余标签
+                if template.tags.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(Array(template.tags.dropFirst()), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .foregroundColor(.accentColor)
+                                    .clipShape(Capsule())
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                }
             }
         }
         .padding(.vertical, 8)
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let remainingSeconds = seconds % 60
+        return String(format: "%d:%02d", minutes, remainingSeconds)
     }
 }
 
@@ -318,49 +348,79 @@ struct CloudTemplateCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // 封面图
+            // 封面图片
             AsyncImage(url: URL(string: template.coverThumbnail)) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
             } placeholder: {
                 Color.gray.opacity(0.2)
             }
             .frame(height: 120)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             
-            // 标题
+            // 标题区域 - 固定两行高度
             Text(template.title)
                 .font(.headline)
                 .lineLimit(2)
+                .frame(height: 44, alignment: .topLeading)
             
-            // 标签
-            if !template.tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(template.tags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.secondary.opacity(0.2))
-                                .cornerRadius(4)
-                        }
+            // 时长和标签区域 - 固定两行高度
+            VStack(alignment: .leading, spacing: 4) {
+                // 第一行：时长和第一个标签
+                HStack(spacing: 6) {
+                    Text(formatDuration(template.duration))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    if !template.tags.isEmpty {
+                        // 分隔点
+                        Circle()
+                            .fill(Color.secondary)
+                            .frame(width: 3, height: 3)
+                        
+                        // 第一个标签
+                        Text(template.tags[0])
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.1))
+                            .foregroundColor(.accentColor)
+                            .clipShape(Capsule())
+                            .lineLimit(1)
                     }
                 }
+                
+                // 第二行：剩余标签的滚动视图
+                if template.tags.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(Array(template.tags.dropFirst()), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .foregroundColor(.accentColor)
+                                    .clipShape(Capsule())
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .frame(height: 20) // 固定第二行高度
+                }
             }
-            
-            // 使用次数
-            HStack {
-                Spacer()
-                Text("\(template.usageCount) 次使用")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            .frame(height: 44, alignment: .topLeading) // 固定总高度
         }
         .padding(8)
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(radius: 2)
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let remainingSeconds = seconds % 60
+        return String(format: "%d:%02d", minutes, remainingSeconds)
     }
 }

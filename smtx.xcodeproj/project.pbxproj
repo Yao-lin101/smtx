@@ -193,11 +193,12 @@
 				};
 			};
 			buildConfigurationList = 91D4BCCA2D1988EC00C69284 /* Build configuration list for PBXProject "smtx" */;
-			developmentRegion = en;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = 91D4BCC62D1988EC00C69284;
 			minimizedProjectReferenceProxies = 1;
