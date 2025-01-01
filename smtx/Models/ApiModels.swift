@@ -119,6 +119,7 @@ struct CloudTemplate: Codable, Identifiable {
     let description: String?
     let authorUid: String?
     let authorName: String?
+    let authorAvatar: String?
     let languageSection: String?
     let tags: [String]
     let duration: Int
@@ -151,6 +152,7 @@ struct CloudTemplate: Codable, Identifiable {
         case description
         case authorUid = "author_uid"
         case authorName = "author_name"
+        case authorAvatar = "author_avatar"
         case languageSection = "language_section"
         case tags
         case duration
@@ -178,6 +180,7 @@ struct CloudTemplate: Codable, Identifiable {
         description = try container.decodeIfPresent(String.self, forKey: .description)
         authorUid = try container.decodeIfPresent(String.self, forKey: .authorUid)
         authorName = try container.decodeIfPresent(String.self, forKey: .authorName)
+        authorAvatar = try container.decodeIfPresent(String.self, forKey: .authorAvatar)
         languageSection = try container.decodeIfPresent(String.self, forKey: .languageSection)
         tags = try container.decode([String].self, forKey: .tags)
         duration = try container.decode(Int.self, forKey: .duration)

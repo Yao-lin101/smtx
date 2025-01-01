@@ -5,22 +5,37 @@ struct CloudTemplateDetailView: View {
     @EnvironmentObject private var router: NavigationRouter
     @StateObject private var viewModel = CloudTemplateViewModel()
     @State private var selectedTab = 0
+    @State private var coverImage: UIImage?
+    @State private var avatarImage: UIImage?
     
     var body: some View {
         ScrollView {
             if let template = viewModel.templates.first {
                 VStack(spacing: 16) {
-                    // 封面图
-                    AsyncImage(url: URL(string: template.coverThumbnail)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.gray.opacity(0.2)
+                    // 封面图片 - 使用原图
+                    Group {
+                        if let image = coverImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        } else {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.secondary.opacity(0.2))
+                                .aspectRatio(4/3, contentMode: .fit)
+                        }
                     }
-                    .frame(height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal)
+                    .task {
+                        if let template = viewModel.templates.first,
+                           let url = URL(string: template.coverOriginal) {  // 使用原图 URL
+                            do {
+                                coverImage = try await ImageCacheManager.shared.loadImage(from: url)
+                            } catch {
+                                print("Error loading image: \(error)")
+                            }
+                        }
+                    }
                     
                     // 标题和作者
                     VStack(alignment: .leading, spacing: 8) {
@@ -29,7 +44,36 @@ struct CloudTemplateDetailView: View {
                             .bold()
                         
                         HStack {
-                            Text("作者：\(template.authorName ?? "未知")")
+                            // 作者头像
+                            Group {
+                                if let avatarUrl = template.authorAvatar,
+                                   let url = URL(string: "http://192.168.1.102:8000\(avatarUrl)") {
+                                    if let image = avatarImage {
+                                        Image(uiImage: image)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 24, height: 24)
+                                            .clipShape(Circle())
+                                    } else {
+                                        Circle()
+                                            .fill(Color.secondary.opacity(0.2))
+                                            .frame(width: 24, height: 24)
+                                            .task {
+                                                do {
+                                                    avatarImage = try await ImageCacheManager.shared.loadImage(from: url)
+                                                } catch {
+                                                    print("Error loading avatar: \(error)")
+                                                }
+                                            }
+                                    }
+                                } else {
+                                    Circle()
+                                        .fill(Color.secondary.opacity(0.2))
+                                        .frame(width: 24, height: 24)
+                                }
+                            }
+                            
+                            Text(template.authorName ?? "未知用户")
                                 .foregroundColor(.secondary)
                             Spacer()
                             Text(formatDate(template.createdAt))
