@@ -251,8 +251,30 @@ class CloudTemplateViewModel: ObservableObject {
         Task {
             do {
                 let isLiked = try await service.likeTemplate(uid: uid)
-                // 这里可以更新模板的点赞状态
-                print("Template \(uid) like status: \(isLiked)")
+                // 更新点赞状态和数量
+                if let template = selectedTemplate {
+                    selectedTemplate = CloudTemplate(
+                        uid: template.uid,
+                        title: template.title,
+                        authorUid: template.authorUid,
+                        authorName: template.authorName,
+                        authorAvatar: template.authorAvatar,
+                        duration: template.duration,
+                        usageCount: template.usageCount,
+                        timelineFile: template.timelineFile,
+                        coverOriginal: template.coverOriginal,
+                        likesCount: template.likesCount + (isLiked ? 1 : -1),
+                        collectionsCount: template.collectionsCount,
+                        commentsCount: template.commentsCount,
+                        recordingsCount: template.recordingsCount,
+                        status: template.status,
+                        comments: template.comments,
+                        recordings: template.recordings,
+                        isLiked: isLiked,
+                        isCollected: template.isCollected,
+                        updatedAt: template.updatedAt
+                    )
+                }
             } catch {
                 errorMessage = "操作失败"
                 showError = true
@@ -264,8 +286,30 @@ class CloudTemplateViewModel: ObservableObject {
         Task {
             do {
                 let isCollected = try await service.collectTemplate(uid: uid)
-                // 这里可以更新模板的收藏状态
-                print("Template \(uid) collection status: \(isCollected)")
+                // 更新收藏状态和数量
+                if let template = selectedTemplate {
+                    selectedTemplate = CloudTemplate(
+                        uid: template.uid,
+                        title: template.title,
+                        authorUid: template.authorUid,
+                        authorName: template.authorName,
+                        authorAvatar: template.authorAvatar,
+                        duration: template.duration,
+                        usageCount: template.usageCount,
+                        timelineFile: template.timelineFile,
+                        coverOriginal: template.coverOriginal,
+                        likesCount: template.likesCount,
+                        collectionsCount: template.collectionsCount + (isCollected ? 1 : -1),
+                        commentsCount: template.commentsCount,
+                        recordingsCount: template.recordingsCount,
+                        status: template.status,
+                        comments: template.comments,
+                        recordings: template.recordings,
+                        isLiked: template.isLiked,
+                        isCollected: isCollected,
+                        updatedAt: template.updatedAt
+                    )
+                }
             } catch {
                 errorMessage = "操作失败"
                 showError = true

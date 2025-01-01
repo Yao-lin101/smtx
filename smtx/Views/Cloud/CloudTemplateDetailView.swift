@@ -11,9 +11,24 @@ struct CloudTemplateDetailView: View {
             if let template = viewModel.selectedTemplate {
                 VStack(spacing: 16) {
                     CoverImageView(template: template)
-                    AuthorInfoView(template: template)
-                    TitleView(title: template.title)
-                    InteractionButtonsView(template: template, viewModel: viewModel)
+                    
+                    VStack(spacing: 12) {
+                        Text(template.title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        HStack(alignment: .center) {
+                            UserInfoView(template: template)
+                            
+                            Spacer()
+                            
+                            InteractionButtonsView(template: template, viewModel: viewModel)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
                     TimelinePreviewView(
                         timelineItems: [
                             TimelineItemData(script: "示例文本1", imageData: nil, timestamp: 1.0, createdAt: Date(), updatedAt: Date()),
@@ -70,23 +85,23 @@ struct CoverImageView: View {
     }
 }
 
-struct AuthorInfoView: View {
+struct UserInfoView: View {
     let template: CloudTemplate
     @State private var avatarImage: UIImage?
     
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             Group {
                 if let image = avatarImage {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 40, height: 40)
+                        .frame(width: 32, height: 32)
                         .clipShape(Circle())
                 } else {
                     Circle()
                         .fill(Color.secondary.opacity(0.2))
-                        .frame(width: 40, height: 40)
+                        .frame(width: 32, height: 32)
                 }
             }
             .task {
@@ -97,17 +112,15 @@ struct AuthorInfoView: View {
                 }
             }
             
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(template.authorName ?? "未知用户")
-                    .font(.headline)
-                Text(formatDate(template.updatedAt))
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                Text("更新于：\(formatDate(template.updatedAt))")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
-            Spacer()
         }
-        .padding(.horizontal)
     }
     
     private func formatDate(_ date: Date) -> String {
@@ -119,35 +132,20 @@ struct AuthorInfoView: View {
     }
 }
 
-struct TitleView: View {
-    let title: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.title2)
-                .fontWeight(.bold)
-        }
-        .padding(.horizontal)
-    }
-}
-
 struct InteractionButtonsView: View {
     let template: CloudTemplate
     let viewModel: CloudTemplateViewModel
     
     var body: some View {
-        HStack(spacing: 24) {
-            Spacer()
-            
+        HStack(spacing: 16) {
             Button {
                 viewModel.likeTemplate(uid: template.uid)
             } label: {
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     Image(systemName: template.isLiked ? "heart.fill" : "heart")
-                        .font(.title2)
+                        .font(.system(size: 18))
                     Text("\(template.likesCount)")
-                        .font(.caption)
+                        .font(.caption2)
                 }
                 .foregroundColor(template.isLiked ? .red : .primary)
             }
@@ -155,18 +153,15 @@ struct InteractionButtonsView: View {
             Button {
                 viewModel.collectTemplate(uid: template.uid)
             } label: {
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     Image(systemName: template.isCollected ? "star.fill" : "star")
-                        .font(.title2)
+                        .font(.system(size: 18))
                     Text("\(template.collectionsCount)")
-                        .font(.caption)
+                        .font(.caption2)
                 }
                 .foregroundColor(template.isCollected ? .yellow : .primary)
             }
-            
-            Spacer()
         }
-        .padding(.vertical)
     }
 }
 
