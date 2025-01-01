@@ -5,134 +5,15 @@ struct CloudTemplateDetailView: View {
     @EnvironmentObject private var router: NavigationRouter
     @StateObject private var viewModel = CloudTemplateViewModel()
     @State private var selectedTab = 0
-    @State private var coverImage: UIImage?
-    @State private var avatarImage: UIImage?
     
     var body: some View {
         ScrollView {
             if let template = viewModel.selectedTemplate {
                 VStack(spacing: 16) {
-                    // 封面图片 - 使用原图
-                    Group {
-                        if let image = coverImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: .infinity)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        } else {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.secondary.opacity(0.2))
-                                .aspectRatio(4/3, contentMode: .fit)
-                        }
-                    }
-                    .task {
-                        if coverImage == nil {
-                            if let url = URL(string: template.fullCoverOriginal) {
-                                coverImage = try? await ImageCacheManager.shared.loadImage(from: url)
-                            }
-                        }
-                    }
-                    
-                    // 作者信息
-                    HStack {
-                        // 头像
-                        Group {
-                            if let image = avatarImage {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 40, height: 40)
-                                    .clipShape(Circle())
-                            } else {
-                                Circle()
-                                    .fill(Color.secondary.opacity(0.2))
-                                    .frame(width: 40, height: 40)
-                            }
-                        }
-                        .task {
-                            if avatarImage == nil, 
-                               let avatarUrl = template.fullAuthorAvatar,
-                               let url = URL(string: avatarUrl) {
-                                avatarImage = try? await ImageCacheManager.shared.loadImage(from: url)
-                            }
-                        }
-                        
-                        VStack(alignment: .leading) {
-                            Text(template.authorName ?? "未知用户")
-                                .font(.headline)
-                            Text(formatDate(template.createdAt))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    
-                    // 标题和描述
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(template.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        
-                        if let description = template.description {
-                            Text(description)
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    // 标签列表
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(template.tags, id: \.self) { tag in
-                                Text(tag)
-                                    .font(.caption)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(Color.accentColor.opacity(0.1))
-                                    .foregroundColor(.accentColor)
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-                    
-                    // 点赞和收藏按钮
-                    HStack(spacing: 24) {
-                        Spacer()
-                        
-                        Button {
-                            viewModel.likeTemplate(uid: template.uid)
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: template.isLiked ?? false ? "heart.fill" : "heart")
-                                    .font(.title2)
-                                Text("\(template.likesCount ?? 0)")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(template.isLiked ?? false ? .red : .primary)
-                        }
-                        
-                        Button {
-                            viewModel.collectTemplate(uid: template.uid)
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: template.isCollected ?? false ? "star.fill" : "star")
-                                    .font(.title2)
-                                Text("\(template.collectionsCount ?? 0)")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(template.isCollected ?? false ? .yellow : .primary)
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(.vertical)
-                    
-                    // 时间轴预览
+                    CoverImageView(template: template)
+                    AuthorInfoView(template: template)
+                    TitleView(title: template.title)
+                    InteractionButtonsView(template: template, viewModel: viewModel)
                     TimelinePreviewView(
                         timelineItems: [
                             TimelineItemData(script: "示例文本1", imageData: nil, timestamp: 1.0, createdAt: Date(), updatedAt: Date()),
@@ -143,33 +24,7 @@ struct CloudTemplateDetailView: View {
                     )
                     .padding(.horizontal)
                     
-                    // 标签切换
-                    Picker("内容", selection: $selectedTab) {
-                        Text("录音").tag(0)
-                        Text("评论").tag(1)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding()
-                    
-                    // 录音和评论列表
-                    Group {
-                        if selectedTab == 0 {
-                            // 录音列表
-                            VStack {
-                                ForEach(0..<3) { _ in
-                                    RecordingRow()
-                                }
-                            }
-                        } else {
-                            // 评论列表
-                            VStack {
-                                ForEach(0..<3) { _ in
-                                    CommentRow()
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
+                    TabSectionView(selectedTab: $selectedTab)
                 }
                 .padding(.vertical)
             } else {
@@ -183,6 +38,77 @@ struct CloudTemplateDetailView: View {
             viewModel.loadTemplate(uid)
         }
     }
+}
+
+// MARK: - Subviews
+
+struct CoverImageView: View {
+    let template: CloudTemplate
+    @State private var coverImage: UIImage?
+    
+    var body: some View {
+        Group {
+            if let image = coverImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.secondary.opacity(0.2))
+                    .aspectRatio(4/3, contentMode: .fit)
+            }
+        }
+        .task {
+            if coverImage == nil {
+                if let url = URL(string: template.fullCoverOriginal) {
+                    coverImage = try? await ImageCacheManager.shared.loadImage(from: url)
+                }
+            }
+        }
+    }
+}
+
+struct AuthorInfoView: View {
+    let template: CloudTemplate
+    @State private var avatarImage: UIImage?
+    
+    var body: some View {
+        HStack {
+            Group {
+                if let image = avatarImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                }
+            }
+            .task {
+                if avatarImage == nil, 
+                   let avatarUrl = template.fullAuthorAvatar,
+                   let url = URL(string: avatarUrl) {
+                    avatarImage = try? await ImageCacheManager.shared.loadImage(from: url)
+                }
+            }
+            
+            VStack(alignment: .leading) {
+                Text(template.authorName ?? "未知用户")
+                    .font(.headline)
+                Text(formatDate(template.updatedAt))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+    }
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -190,6 +116,89 @@ struct CloudTemplateDetailView: View {
         formatter.timeStyle = .none
         formatter.locale = Locale(identifier: "zh_CN")
         return formatter.string(from: date)
+    }
+}
+
+struct TitleView: View {
+    let title: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.title2)
+                .fontWeight(.bold)
+        }
+        .padding(.horizontal)
+    }
+}
+
+struct InteractionButtonsView: View {
+    let template: CloudTemplate
+    let viewModel: CloudTemplateViewModel
+    
+    var body: some View {
+        HStack(spacing: 24) {
+            Spacer()
+            
+            Button {
+                viewModel.likeTemplate(uid: template.uid)
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: template.isLiked ? "heart.fill" : "heart")
+                        .font(.title2)
+                    Text("\(template.likesCount)")
+                        .font(.caption)
+                }
+                .foregroundColor(template.isLiked ? .red : .primary)
+            }
+            
+            Button {
+                viewModel.collectTemplate(uid: template.uid)
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: template.isCollected ? "star.fill" : "star")
+                        .font(.title2)
+                    Text("\(template.collectionsCount)")
+                        .font(.caption)
+                }
+                .foregroundColor(template.isCollected ? .yellow : .primary)
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical)
+    }
+}
+
+struct TabSectionView: View {
+    @Binding var selectedTab: Int
+    
+    var body: some View {
+        VStack {
+            Picker("内容", selection: $selectedTab) {
+                Text("录音").tag(0)
+                Text("评论").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+            
+            Group {
+                if selectedTab == 0 {
+                    VStack {
+                        ForEach(0..<3) { _ in
+                            RecordingRow()
+                        }
+                    }
+                } else {
+                    VStack {
+                        ForEach(0..<3) { _ in
+                            CommentRow()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
     }
 }
 

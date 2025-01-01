@@ -136,30 +136,60 @@ struct CloudTemplateListResponse: Codable {
     let results: [CloudTemplateListItem]
 }
 
+struct TemplateComment: Codable {
+    let id: Int
+    let userUid: String
+    let content: String
+    let createdAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userUid = "user_uid"
+        case content
+        case createdAt = "created_at"
+    }
+}
+
+struct TemplateRecording: Codable {
+    let uid: String
+    let userUid: String
+    let audioFile: String
+    let duration: Int
+    let createdAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case uid
+        case userUid = "user_uid"
+        case audioFile = "audio_file"
+        case duration
+        case createdAt = "created_at"
+    }
+    
+    var fullAudioFile: String {
+        APIConfig.shared.mediaURL(audioFile)
+    }
+}
+
 struct CloudTemplate: Codable, Identifiable {
     let uid: String
     let title: String
-    let description: String?
     let authorUid: String?
     let authorName: String?
     let authorAvatar: String?
-    let languageSection: String
-    let tags: [String]
     let duration: Int
-    let version: String
     let usageCount: Int?
-    let likesCount: Int?
-    let collectionsCount: Int?
-    let recordingsCount: Int?
-    let commentsCount: Int?
-    let isLiked: Bool?
-    let isCollected: Bool?
     let timelineFile: String
     let coverOriginal: String
-    let coverThumbnail: String
-    let createdAt: Date
-    let updatedAt: Date
+    let likesCount: Int
+    let collectionsCount: Int
+    let commentsCount: Int
+    let recordingsCount: Int
     let status: TemplateStatus
+    let comments: [TemplateComment]
+    let recordings: [TemplateRecording]
+    let isLiked: Bool
+    let isCollected: Bool
+    let updatedAt: Date
     
     var id: String { uid }
     
@@ -178,40 +208,10 @@ struct CloudTemplate: Codable, Identifiable {
         APIConfig.shared.mediaURL(coverOriginal)
     }
     
-    var fullCoverThumbnail: String {
-        APIConfig.shared.mediaURL(coverThumbnail)
-    }
-    
     enum TemplateStatus: String, Codable {
         case processing = "processing"
         case completed = "completed"
         case failed = "failed"
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case uid
-        case title
-        case description
-        case authorUid = "author_uid"
-        case authorName = "author_name"
-        case authorAvatar = "author_avatar"
-        case languageSection = "language_section"
-        case tags
-        case duration
-        case version
-        case usageCount = "usage_count"
-        case likesCount = "likes_count"
-        case collectionsCount = "collections_count"
-        case recordingsCount = "recordings_count"
-        case commentsCount = "comments_count"
-        case isLiked = "is_liked"
-        case isCollected = "is_collected"
-        case timelineFile = "timeline_file"
-        case coverOriginal = "cover_original"
-        case coverThumbnail = "cover_thumbnail"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case status
     }
 }
 
