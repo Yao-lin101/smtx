@@ -136,7 +136,7 @@ struct CloudTemplateListResponse: Codable {
     let results: [CloudTemplateListItem]
 }
 
-struct TemplateComment: Codable {
+struct TemplateComment: Codable, Equatable {
     let id: Int
     let userUid: String
     let content: String
@@ -150,7 +150,7 @@ struct TemplateComment: Codable {
     }
 }
 
-struct TemplateRecording: Codable {
+struct TemplateRecording: Codable, Equatable {
     let uid: String
     let userUid: String
     let audioFile: String
@@ -170,7 +170,7 @@ struct TemplateRecording: Codable {
     }
 }
 
-struct CloudTemplate: Codable, Identifiable {
+struct CloudTemplate: Codable, Identifiable, Equatable {
     let uid: String
     let title: String
     let authorUid: String?
@@ -212,6 +212,26 @@ struct CloudTemplate: Codable, Identifiable {
         case processing = "processing"
         case completed = "completed"
         case failed = "failed"
+    }
+    
+    static func == (lhs: CloudTemplate, rhs: CloudTemplate) -> Bool {
+        lhs.uid == rhs.uid &&
+        lhs.title == rhs.title &&
+        lhs.authorUid == rhs.authorUid &&
+        lhs.authorName == rhs.authorName &&
+        lhs.authorAvatar == rhs.authorAvatar &&
+        lhs.duration == rhs.duration &&
+        lhs.usageCount == rhs.usageCount &&
+        lhs.timelineFile == rhs.timelineFile &&
+        lhs.coverOriginal == rhs.coverOriginal &&
+        lhs.likesCount == rhs.likesCount &&
+        lhs.collectionsCount == rhs.collectionsCount &&
+        lhs.commentsCount == rhs.commentsCount &&
+        lhs.recordingsCount == rhs.recordingsCount &&
+        lhs.status == rhs.status &&
+        lhs.isLiked == rhs.isLiked &&
+        lhs.isCollected == rhs.isCollected &&
+        lhs.updatedAt == rhs.updatedAt
     }
 }
 
@@ -271,4 +291,18 @@ struct ErrorResponse: Codable {
         case message
         case code
     }
+}
+
+struct TimelineData: Codable {
+    let duration: Double
+    let images: [String]
+    let events: [TimelineEvent]
+}
+
+struct TimelineEvent: Codable, Identifiable {
+    let time: Double
+    let text: String?
+    let image: String?
+    
+    var id: Double { time }
 } 

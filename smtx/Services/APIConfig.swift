@@ -74,5 +74,9 @@ struct APIConfig {
         return baseHost + path
     }
     
+    func timelineImageURL(templateUid: String, imageName: String) -> String {
+        "\(baseHost)/media/templates/\(templateUid)/images/\(imageName)"
+    }
+    
     private init() {}
 } 
