@@ -270,7 +270,7 @@ struct CloudTemplatesView: View {
 // MARK: - Supporting Views
 
 struct CloudTemplateRow: View {
-    let template: CloudTemplate
+    let template: CloudTemplateListItem
     @State private var coverImage: UIImage?
     
     var body: some View {
@@ -290,12 +290,11 @@ struct CloudTemplateRow: View {
                 }
             }
             .task {
-                if let url = URL(string: template.coverThumbnail) {
-                    do {
-                        coverImage = try await ImageCacheManager.shared.loadImage(from: url)
-                    } catch {
-                        print("Error loading image: \(error)")
-                    }
+                let url = URL(string: template.fullCoverThumbnail)!
+                do {
+                    coverImage = try await ImageCacheManager.shared.loadImage(from: url)
+                } catch {
+                    print("Error loading image: \(error)")
                 }
             }
             
@@ -359,7 +358,7 @@ struct CloudTemplateRow: View {
 }
 
 struct CloudTemplateCard: View {
-    let template: CloudTemplate
+    let template: CloudTemplateListItem
     @State private var coverImage: UIImage?
     
     var body: some View {
@@ -379,12 +378,11 @@ struct CloudTemplateCard: View {
                 }
             }
             .task {
-                if let url = URL(string: template.coverThumbnail) {
-                    do {
-                        coverImage = try await ImageCacheManager.shared.loadImage(from: url)
-                    } catch {
-                        print("Error loading image: \(error)")
-                    }
+                let url = URL(string: template.fullCoverThumbnail)!
+                do {
+                    coverImage = try await ImageCacheManager.shared.loadImage(from: url)
+                } catch {
+                    print("Error loading image: \(error)")
                 }
             }
             

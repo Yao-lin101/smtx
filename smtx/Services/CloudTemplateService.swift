@@ -154,7 +154,7 @@ class CloudTemplateService {
         }
     }
     
-    func fetchTemplates(languageSectionUid: String? = nil, search: String? = nil, page: Int = 1) async throws -> [CloudTemplate] {
+    func fetchTemplates(languageSectionUid: String? = nil, search: String? = nil, page: Int = 1) async throws -> [CloudTemplateListItem] {
         print("📡 准备请求模板列表")
         var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
         if let languageSectionUid = languageSectionUid {
@@ -171,7 +171,7 @@ class CloudTemplateService {
         
         do {
             print("📥 开始网络请求")
-            let response: PaginatedResponse<CloudTemplate> = try await networkService.get(
+            let response: PaginatedResponse<CloudTemplateListItem> = try await networkService.get(
                 urlString,
                 decoder: DateDecoder.decoder
             )
@@ -187,14 +187,14 @@ class CloudTemplateService {
                 print("🔒 未授权错误")
                 throw TemplateError.unauthorized
             case .networkError(let error):
-                print("🌐 网络错误: \(error.localizedDescription)")
+                print("🌐 网络错误: \(error)")
                 throw TemplateError.networkError(error.localizedDescription)
             case .decodingError:
                 print("📦 解码错误")
                 throw TemplateError.decodingError
             default:
                 print("❓ 未知错误")
-                throw TemplateError.operationFailed("获取模板列表失败")
+                throw TemplateError.templateNotFound
             }
         }
     }
@@ -527,11 +527,11 @@ class CloudTemplateService {
         )
     }
     
-    func listTemplates(languageSectionUids: [String]) async throws -> [CloudTemplate] {
+    func listTemplates(languageSectionUids: [String]) async throws -> [CloudTemplateListItem] {
         print("📡 开始加载多个分区的模板")
         print("📍 分区列表: \(languageSectionUids)")
         
-        let templates = try await withThrowingTaskGroup(of: [CloudTemplate].self) { group in
+        let templates = try await withThrowingTaskGroup(of: [CloudTemplateListItem].self) { group in
             for uid in languageSectionUids {
                 group.addTask {
                     print("📤 请求分区 \(uid) 的模板")
@@ -539,7 +539,7 @@ class CloudTemplateService {
                 }
             }
             
-            var allTemplates: [CloudTemplate] = []
+            var allTemplates: [CloudTemplateListItem] = []
             for try await templates in group {
                 print("✅ 成功接收一个分区的模板，数量: \(templates.count)")
                 allTemplates.append(contentsOf: templates)
@@ -548,8 +548,8 @@ class CloudTemplateService {
             return allTemplates
         }
         
-        let sortedTemplates = templates.sorted { (template, otherTemplate) -> Bool in
-            (template.usageCount ?? 0) > (otherTemplate.usageCount ?? 0)
+        let sortedTemplates = templates.sorted { (template: CloudTemplateListItem, otherTemplate: CloudTemplateListItem) in
+            template.createdAt > otherTemplate.createdAt
         }
         print("✅ 完成模板排序，返回结果")
         return sortedTemplates

@@ -113,6 +113,29 @@ struct LanguageSection: Codable, Identifiable, Equatable {
     }
 }
 
+struct CloudTemplateListItem: Codable, Identifiable {
+    let uid: String
+    let title: String
+    let tags: [String]
+    let duration: Int
+    let coverThumbnail: String
+    let createdAt: Date
+    let status: String
+    
+    var id: String { uid }
+    
+    var fullCoverThumbnail: String {
+        APIConfig.shared.mediaURL(coverThumbnail)
+    }
+}
+
+struct CloudTemplateListResponse: Codable {
+    let count: Int
+    let next: String?
+    let previous: String?
+    let results: [CloudTemplateListItem]
+}
+
 struct CloudTemplate: Codable, Identifiable {
     let uid: String
     let title: String
@@ -120,7 +143,7 @@ struct CloudTemplate: Codable, Identifiable {
     let authorUid: String?
     let authorName: String?
     let authorAvatar: String?
-    let languageSection: String?
+    let languageSection: String
     let tags: [String]
     let duration: Int
     let version: String
@@ -139,6 +162,25 @@ struct CloudTemplate: Codable, Identifiable {
     let status: TemplateStatus
     
     var id: String { uid }
+    
+    var fullAuthorAvatar: String? {
+        if let avatar = authorAvatar {
+            return APIConfig.shared.mediaURL(avatar)
+        }
+        return nil
+    }
+    
+    var fullTimelineFile: String {
+        APIConfig.shared.mediaURL(timelineFile)
+    }
+    
+    var fullCoverOriginal: String {
+        APIConfig.shared.mediaURL(coverOriginal)
+    }
+    
+    var fullCoverThumbnail: String {
+        APIConfig.shared.mediaURL(coverThumbnail)
+    }
     
     enum TemplateStatus: String, Codable {
         case processing = "processing"
@@ -164,59 +206,12 @@ struct CloudTemplate: Codable, Identifiable {
         case commentsCount = "comments_count"
         case isLiked = "is_liked"
         case isCollected = "is_collected"
-        case timelineFile = "timelines.json"
-        case coverOriginal = "covers_original.jpg"
-        case coverThumbnail = "covers_thumbnails.jpg"
+        case timelineFile = "timeline_file"
+        case coverOriginal = "cover_original"
+        case coverThumbnail = "cover_thumbnail"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case status
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        uid = try container.decode(String.self, forKey: .uid)
-        title = try container.decode(String.self, forKey: .title)
-        description = try container.decodeIfPresent(String.self, forKey: .description)
-        authorUid = try container.decodeIfPresent(String.self, forKey: .authorUid)
-        authorName = try container.decodeIfPresent(String.self, forKey: .authorName)
-        authorAvatar = try container.decodeIfPresent(String.self, forKey: .authorAvatar)
-        languageSection = try container.decodeIfPresent(String.self, forKey: .languageSection)
-        tags = try container.decode([String].self, forKey: .tags)
-        duration = try container.decode(Int.self, forKey: .duration)
-        version = try container.decode(String.self, forKey: .version)
-        usageCount = try container.decodeIfPresent(Int.self, forKey: .usageCount)
-        likesCount = try container.decodeIfPresent(Int.self, forKey: .likesCount)
-        collectionsCount = try container.decodeIfPresent(Int.self, forKey: .collectionsCount)
-        recordingsCount = try container.decodeIfPresent(Int.self, forKey: .recordingsCount)
-        commentsCount = try container.decodeIfPresent(Int.self, forKey: .commentsCount)
-        isLiked = try container.decodeIfPresent(Bool.self, forKey: .isLiked)
-        isCollected = try container.decodeIfPresent(Bool.self, forKey: .isCollected)
-        
-        let baseUrl = "http://192.168.1.102:8000/media/templates/"
-        let templateUid = try container.decode(String.self, forKey: .uid)
-        timelineFile = baseUrl + templateUid + "/timelines.json"
-        coverOriginal = baseUrl + templateUid + "/covers_original.jpg"
-        coverThumbnail = baseUrl + templateUid + "/covers_thumbnails.jpg"
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ"
-        
-        if let createdAtString = try container.decodeIfPresent(String.self, forKey: .createdAt),
-           let date = dateFormatter.date(from: createdAtString) {
-            createdAt = date
-        } else {
-            createdAt = Date()
-        }
-        
-        if let updatedAtString = try container.decodeIfPresent(String.self, forKey: .updatedAt),
-           let date = dateFormatter.date(from: updatedAtString) {
-            updatedAt = date
-        } else {
-            updatedAt = Date()
-        }
-        
-        status = try container.decode(TemplateStatus.self, forKey: .status)
     }
 }
 

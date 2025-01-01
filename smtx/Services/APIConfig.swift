@@ -65,5 +65,14 @@ struct APIConfig {
     func languageSectionURL(uid: String) -> String { return "\(baseURL)/language-sections/\(uid)/" }
     func languageSectionSubscribeURL(uid: String) -> String { return "\(baseURL)/language-sections/\(uid)/subscribe/" }
     
+    // MARK: - Media URLs
+    
+    func mediaURL(_ path: String) -> String {
+        if path.hasPrefix("http") {
+            return path
+        }
+        return baseHost + path
+    }
+    
     private init() {}
 } 

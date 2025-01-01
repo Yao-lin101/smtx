@@ -10,7 +10,7 @@ struct CloudTemplateDetailView: View {
     
     var body: some View {
         ScrollView {
-            if let template = viewModel.templates.first {
+            if let template = viewModel.selectedTemplate {
                 VStack(spacing: 16) {
                     // 封面图片 - 使用原图
                     Group {
@@ -27,63 +27,64 @@ struct CloudTemplateDetailView: View {
                         }
                     }
                     .task {
-                        if let template = viewModel.templates.first,
-                           let url = URL(string: template.coverOriginal) {  // 使用原图 URL
-                            do {
-                                coverImage = try await ImageCacheManager.shared.loadImage(from: url)
-                            } catch {
-                                print("Error loading image: \(error)")
+                        if coverImage == nil {
+                            if let url = URL(string: template.fullCoverOriginal) {
+                                coverImage = try? await ImageCacheManager.shared.loadImage(from: url)
                             }
                         }
                     }
                     
-                    // 标题和作者
+                    // 作者信息
+                    HStack {
+                        // 头像
+                        Group {
+                            if let image = avatarImage {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(Circle())
+                            } else {
+                                Circle()
+                                    .fill(Color.secondary.opacity(0.2))
+                                    .frame(width: 40, height: 40)
+                            }
+                        }
+                        .task {
+                            if avatarImage == nil, 
+                               let avatarUrl = template.fullAuthorAvatar,
+                               let url = URL(string: avatarUrl) {
+                                avatarImage = try? await ImageCacheManager.shared.loadImage(from: url)
+                            }
+                        }
+                        
+                        VStack(alignment: .leading) {
+                            Text(template.authorName ?? "未知用户")
+                                .font(.headline)
+                            Text(formatDate(template.createdAt))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    
+                    // 标题和描述
                     VStack(alignment: .leading, spacing: 8) {
                         Text(template.title)
                             .font(.title2)
-                            .bold()
+                            .fontWeight(.bold)
                         
-                        HStack {
-                            // 作者头像
-                            Group {
-                                if let avatarUrl = template.authorAvatar,
-                                   let url = URL(string: "http://192.168.1.102:8000\(avatarUrl)") {
-                                    if let image = avatarImage {
-                                        Image(uiImage: image)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 24, height: 24)
-                                            .clipShape(Circle())
-                                    } else {
-                                        Circle()
-                                            .fill(Color.secondary.opacity(0.2))
-                                            .frame(width: 24, height: 24)
-                                            .task {
-                                                do {
-                                                    avatarImage = try await ImageCacheManager.shared.loadImage(from: url)
-                                                } catch {
-                                                    print("Error loading avatar: \(error)")
-                                                }
-                                            }
-                                    }
-                                } else {
-                                    Circle()
-                                        .fill(Color.secondary.opacity(0.2))
-                                        .frame(width: 24, height: 24)
-                                }
-                            }
-                            
-                            Text(template.authorName ?? "未知用户")
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text(formatDate(template.createdAt))
-                                .font(.caption)
+                        if let description = template.description {
+                            Text(description)
+                                .font(.body)
                                 .foregroundColor(.secondary)
                         }
                     }
                     .padding(.horizontal)
                     
-                    // 标签
+                    // 标签列表
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(template.tags, id: \.self) { tag in

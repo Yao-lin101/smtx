@@ -51,11 +51,29 @@ class NetworkService {
             case 200...299:
                 do {
                     print("🔄 开始解码数据")
-                    let decodedData = try (decoder ?? JSONDecoder()).decode(T.self, from: data)
+                    let decoder = decoder ?? DateDecoder.decoder
+                    print("🔑 解码器配置:")
+                    print("  - keyDecodingStrategy: \(String(describing: decoder.keyDecodingStrategy))")
+                    print("  - dateDecodingStrategy: \(String(describing: decoder.dateDecodingStrategy))")
+                    let decodedData = try decoder.decode(T.self, from: data)
                     print("✅ 数据解码成功")
+                    print("📦 解码类型: \(T.self)")
                     return decodedData
                 } catch let error {
                     print("❌ 解码错误: \(error)")
+                    if let decodingError = error as? DecodingError {
+                        switch decodingError {
+                        case .keyNotFound(let key, let context):
+                            print("  - 缺失键: \(key)")
+                            print("  - 上下文: \(context.debugDescription)")
+                            print("  - 编码路径: \(context.codingPath.map { $0.stringValue })")
+                        case .typeMismatch(let type, let context):
+                            print("  - 类型不匹配: 期望 \(type)")
+                            print("  - 上下文: \(context.debugDescription)")
+                        default:
+                            print("  - 其他解码错误: \(decodingError)")
+                        }
+                    }
                     throw NetworkError.decodingError(error)
                 }
             case 401:

@@ -4,15 +4,16 @@ import SwiftUI
 @MainActor
 class CloudTemplateViewModel: ObservableObject {
     private let service = CloudTemplateService.shared
-    private let store = LanguageSectionStore.shared  // 添加 store
-    private var hasInitialized = false  // 添加初始化标记
-    private var hasLoadedTemplates = false  // 添加新标记
-    private var currentLoadTask: Task<Void, Never>?  // 添加任务引用
+    private let store = LanguageSectionStore.shared
+    private var hasInitialized = false
+    private var hasLoadedTemplates = false
+    private var currentLoadTask: Task<Void, Never>?
     
     // MARK: - Published Properties
     
     @Published var languageSections: [LanguageSection] = []
-    @Published var templates: [CloudTemplate] = []
+    @Published var templates: [CloudTemplateListItem] = []
+    @Published var selectedTemplate: CloudTemplate?
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showError = false
@@ -132,10 +133,8 @@ class CloudTemplateViewModel: ObservableObject {
     /// 加载模板列表
     /// - Parameter languageSectionUid: 可选的语言分区 UID
     func loadTemplates(languageSectionUid: String? = nil) async {
-        // 取消之前的加载任务
         currentLoadTask?.cancel()
         
-        // 创建新的加载任务
         currentLoadTask = Task {
             isLoading = true
             errorMessage = nil
@@ -147,7 +146,7 @@ class CloudTemplateViewModel: ObservableObject {
                     templates = try await service.fetchTemplates()
                 }
             } catch {
-                if !Task.isCancelled {  // 只在非取消情况下显示错误
+                if !Task.isCancelled {
                     if let templateError = error as? TemplateError {
                         errorMessage = templateError.localizedDescription
                     } else {
@@ -160,7 +159,6 @@ class CloudTemplateViewModel: ObservableObject {
             isLoading = false
         }
         
-        // 等待任务完成
         await currentLoadTask?.value
     }
     
@@ -227,8 +225,12 @@ class CloudTemplateViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                let template = try await service.fetchTemplate(uid: uid)
-                templates = [template]
+                print("🔄 开始加载模板详情: \(uid)")
+                selectedTemplate = try await service.fetchTemplate(uid: uid)
+                print("✅ 模板加载成功:")
+                print("- 标题: \(selectedTemplate?.title ?? "")")
+                print("- 作者: \(selectedTemplate?.authorName ?? "未知")")
+                print("- 头像: \(selectedTemplate?.authorAvatar ?? "无")")
             } catch TemplateError.unauthorized {
                 errorMessage = "请先登录"
                 showError = true
@@ -236,6 +238,7 @@ class CloudTemplateViewModel: ObservableObject {
                 errorMessage = message
                 showError = true
             } catch {
+                print("❌ 加载模板失败: \(error)")
                 errorMessage = "加载模板失败"
                 showError = true
             }
@@ -292,7 +295,7 @@ class CloudTemplateViewModel: ObservableObject {
     
     // MARK: - Filtering
     
-    func filteredTemplates(searchText: String) -> [CloudTemplate] {
+    func filteredTemplates(searchText: String) -> [CloudTemplateListItem] {
         guard !searchText.isEmpty else {
             return templates
         }
