@@ -31,7 +31,7 @@ struct BaseRecordingView: View {
             // 时间轴播放器
             TimelinePlayerView(
                 currentTime: currentTime,
-                totalDuration: timelineProvider.totalDuration,
+                totalDuration: isPreviewMode ? recordedDuration : timelineProvider.totalDuration,
                 currentItem: currentItem
             )
             
