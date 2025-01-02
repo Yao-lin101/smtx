@@ -1,6 +1,20 @@
 import Foundation
 import CoreData
 
+enum RecordingError: LocalizedError {
+    case invalidTemplate
+    case recordNotFound
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidTemplate:
+            return "无效的模板"
+        case .recordNotFound:
+            return "找不到录音记录"
+        }
+    }
+} 
+
 class LocalRecordingDelegate: RecordingDelegate {
     private let template: Template
     private let storage = TemplateStorage.shared
@@ -63,16 +77,35 @@ class LocalRecordingDelegate: RecordingDelegate {
     }
 }
 
-enum RecordingError: LocalizedError {
-    case invalidTemplate
-    case recordNotFound
+class CloudRecordingDelegate: RecordingDelegate {
+    private let templateUid: String
+    @Environment(\.dismiss) private var dismiss
     
-    var errorDescription: String? {
-        switch self {
-        case .invalidTemplate:
-            return "无效的模板"
-        case .recordNotFound:
-            return "找不到录音记录"
-        }
+    init(templateUid: String) {
+        self.templateUid = templateUid
     }
-} 
+    
+    func saveRecording(audioData: Data, duration: Double) async throws -> String {
+        // 保存到缓存
+        let recordId = UUID().uuidString
+        let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(recordId).m4a")
+        try audioData.write(to: cacheURL)
+        return recordId
+    }
+    
+    func deleteRecording(id: String) async throws {
+        // 从缓存中删除
+        let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(id).m4a")
+        try? FileManager.default.removeItem(at: cacheURL)
+    }
+    
+    func loadRecording(id: String) async throws -> (Data, Double)? {
+        // 从缓存中加载
+        let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(id).m4a")
+        guard let audioData = try? Data(contentsOf: cacheURL) else { return nil }
+        
+        // 获取音频时长
+        let player = try AVAudioPlayer(data: audioData)
+        return (audioData, player.duration)
+    }
+}

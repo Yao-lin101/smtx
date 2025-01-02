@@ -57,3 +57,64 @@ class LocalTimelineProvider: TimelineProvider {
         )
     }
 } 
+
+class CloudTimelineProvider: TimelineProvider {
+    private let timelineData: TimelineData
+    private let timelineImages: [String: Data]
+    private var items: [TimelineDisplayData] = []
+    
+    var totalDuration: Double {
+        timelineData.duration
+    }
+    
+    var timelineItems: [TimelineDisplayData] {
+        items
+    }
+    
+    init(timelineData: TimelineData, timelineImages: [String: Data]) {
+        self.timelineData = timelineData
+        self.timelineImages = timelineImages
+        
+        // 构建时间轴项目
+        var lastImage: Data? = nil
+        self.items = timelineData.events.map { event in
+            if let imageName = event.image,
+               let imageData = timelineImages[imageName] {
+                lastImage = imageData
+            }
+            return TimelineDisplayData(
+                script: event.text ?? "",
+                imageData: event.image.flatMap { timelineImages[$0] },
+                lastImageData: lastImage,
+                provider: self,
+                timestamp: event.time
+            )
+        }
+    }
+    
+    func getItemAt(timestamp: Double) -> TimelineDisplayData? {
+        // 找到最后一个时间戳小于等于当前时间的项目
+        guard let currentIndex = timelineData.events.lastIndex(where: { $0.time <= timestamp }) else {
+            return nil
+        }
+        
+        // 找到最近的一个有图片的项目
+        var lastImageData: Data? = nil
+        for i in (0...currentIndex).reversed() {
+            if let imageName = timelineData.events[i].image,
+               let imageData = timelineImages[imageName] {
+                lastImageData = imageData
+                break
+            }
+        }
+        
+        let event = timelineData.events[currentIndex]
+        return TimelineDisplayData(
+            script: event.text ?? "",
+            imageData: event.image.flatMap { timelineImages[$0] },
+            lastImageData: lastImageData,
+            provider: self,
+            timestamp: event.time
+        )
+    }
+}
