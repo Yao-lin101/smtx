@@ -4,7 +4,7 @@ import AVFoundation
 struct BaseRecordingView: View {
     let timelineProvider: TimelineProvider
     let delegate: RecordingDelegate
-    @State private var recordId: String?
+    var onUpload: (() -> Void)?
     
     @Environment(\.dismiss) private var dismiss
     @StateObject private var audioRecorder = AudioRecorder()
@@ -19,13 +19,16 @@ struct BaseRecordingView: View {
     @State private var timer: Timer?
     @State private var wasPlayingBeforeDrag = false
     @State private var playStateVersion = 0
+    @State private var recordId: String?
     
     init(timelineProvider: TimelineProvider,
          delegate: RecordingDelegate,
-         recordId: String? = nil) {
+         recordId: String? = nil,
+         onUpload: (() -> Void)? = nil) {
         self.timelineProvider = timelineProvider
         self.delegate = delegate
         self._recordId = State(initialValue: recordId)
+        self.onUpload = onUpload
     }
     
     private var isPlaying: Bool {
@@ -91,7 +94,8 @@ struct BaseRecordingView: View {
                     onBackward: backward15Seconds,
                     onForward: forward15Seconds,
                     onDelete: { showingDeleteAlert = true },
-                    onDismiss: { @MainActor in dismiss() }
+                    onDismiss: { @MainActor in dismiss() },
+                    onUpload: onUpload
                 )
                 .onChange(of: previewPlayer?.isPlaying) { isPlaying in
                     print("🎵 Player state changed - isPlaying: \(String(describing: isPlaying))")

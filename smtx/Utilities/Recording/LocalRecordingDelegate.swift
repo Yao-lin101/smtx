@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import AVFoundation
 
 enum RecordingError: LocalizedError {
     case invalidTemplate
@@ -79,10 +80,12 @@ class LocalRecordingDelegate: RecordingDelegate {
 
 class CloudRecordingDelegate: RecordingDelegate {
     private let templateUid: String
-    @Environment(\.dismiss) private var dismiss
+    private var recordingData: (audioData: Data, duration: Double)?
+    private let cloudTemplateService: CloudTemplateService
     
-    init(templateUid: String) {
+    init(templateUid: String, cloudTemplateService: CloudTemplateService = .shared) {
         self.templateUid = templateUid
+        self.cloudTemplateService = cloudTemplateService
     }
     
     func saveRecording(audioData: Data, duration: Double) async throws -> String {
@@ -90,6 +93,8 @@ class CloudRecordingDelegate: RecordingDelegate {
         let recordId = UUID().uuidString
         let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(recordId).m4a")
         try audioData.write(to: cacheURL)
+        // 保存录音数据以供上传使用
+        recordingData = (audioData, duration)
         return recordId
     }
     
@@ -97,6 +102,7 @@ class CloudRecordingDelegate: RecordingDelegate {
         // 从缓存中删除
         let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(id).m4a")
         try? FileManager.default.removeItem(at: cacheURL)
+        recordingData = nil
     }
     
     func loadRecording(id: String) async throws -> (Data, Double)? {
@@ -107,5 +113,13 @@ class CloudRecordingDelegate: RecordingDelegate {
         // 获取音频时长
         let player = try AVAudioPlayer(data: audioData)
         return (audioData, player.duration)
+    }
+    
+    func uploadRecording() async throws -> String {
+        guard let (audioData, duration) = recordingData else {
+            throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "没有可上传的录音"])
+        }
+        
+        return try await cloudTemplateService.uploadRecording(templateUid: templateUid, audioData: audioData, duration: duration)
     }
 }

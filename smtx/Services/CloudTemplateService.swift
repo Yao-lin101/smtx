@@ -568,16 +568,19 @@ class CloudTemplateService {
             audioData,
             withName: "audio_file",
             fileName: "recording.m4a",
-            mimeType: "audio/m4a"
+            mimeType: "audio/mpeg"
         )
         
-        // 添加时长
+        // 添加时长（转换为整数）
+        let durationInt = Int(duration)
         formData.append(
-            "\(Int(duration))".data(using: .utf8)!,
+            String(durationInt).data(using: .utf8)!,
             withName: "duration"
         )
         
         print("📤 Sending recording to: \(apiConfig.uploadRecordingURL(templateUid: templateUid))")
+        print("  - Duration value:", durationInt)
+        print("  - Form data fields:", ["audio_file", "duration"])
         
         let response: RecordingUploadResponse = try await networkService.uploadFormData(
             apiConfig.uploadRecordingURL(templateUid: templateUid),
@@ -585,6 +588,12 @@ class CloudTemplateService {
         )
         
         print("✅ 录音上传成功")
+        
+        // 使用 ToastManager 显示成功消息
+        DispatchQueue.main.async {
+            ToastManager.shared.show(response.message)
+        }
+        
         return response.message
     }
 }

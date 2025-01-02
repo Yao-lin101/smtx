@@ -16,6 +16,7 @@ struct RecordingControlsView: View {
     let onForward: () -> Void
     let onDelete: () -> Void
     let onDismiss: () -> Void
+    var onUpload: (() -> Void)?
     
     var body: some View {
         HStack(spacing: 40) {
@@ -47,7 +48,13 @@ struct RecordingControlsView: View {
                     }
                     
                     // 完成按钮
-                    Button(action: onDismiss) {
+                    Button(action: {
+                        if let onUpload = onUpload {
+                            onUpload()
+                        } else {
+                            onDismiss()
+                        }
+                    }) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title)
                             .foregroundColor(.blue)

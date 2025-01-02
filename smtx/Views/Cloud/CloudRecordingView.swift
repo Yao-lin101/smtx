@@ -6,7 +6,8 @@ struct CloudRecordingView: View {
     let timelineImages: [String: Data]
     let templateUid: String
     @Environment(\.dismiss) private var dismiss
-    @State private var showingUploadAlert = false
+    @State private var isUploading = false
+    @StateObject private var toastManager = ToastManager.shared
     
     private let timelineProvider: CloudTimelineProvider
     private let recordingDelegate: CloudRecordingDelegate
@@ -22,22 +23,32 @@ struct CloudRecordingView: View {
     var body: some View {
         BaseRecordingView(
             timelineProvider: timelineProvider,
-            delegate: recordingDelegate
+            delegate: recordingDelegate,
+            onUpload: {
+                isUploading = true
+            }
         )
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("上传") {
-                    showingUploadAlert = true
+        .onChange(of: isUploading) { uploading in
+            if uploading {
+                Task {
+                    do {
+                        let message = try await recordingDelegate.uploadRecording()
+                        await MainActor.run {
+                            isUploading = false
+                            dismiss()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                ToastManager.shared.show(message)
+                            }
+                        }
+                    } catch {
+                        await MainActor.run {
+                            isUploading = false
+                            ToastManager.shared.show(error.localizedDescription, type: .error)
+                        }
+                    }
                 }
             }
         }
-        .alert("上传录音", isPresented: $showingUploadAlert) {
-            Button("取消", role: .cancel) {}
-            Button("上传") {
-                // TODO: 实现上传逻辑
-            }
-        } message: {
-            Text("确定要上传这个录音吗？")
-        }
+        .toastManager()
     }
 } 
