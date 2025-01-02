@@ -3,23 +3,35 @@ import SwiftUI
 struct TimelinePlayerView: View {
     let currentTime: Double
     let totalDuration: Double
-    let currentItem: TimelineItemData?
+    let currentItem: TimelineDisplayData?
     let isPreviewMode: Bool
     let onSeek: ((Double) -> Void)?
     let onDragStart: (() -> Void)?
     @State private var currentImage: UIImage?
     @State private var isDragging = false
     @State private var dragTime: Double = 0
+    @State private var draggedItem: TimelineDisplayData?
     
     private var progress: Double {
         totalDuration > 0 ? (isDragging ? dragTime : currentTime) / totalDuration : 0
+    }
+    
+    private var displayImage: UIImage? {
+        if isDragging {
+            if let imageData = draggedItem?.displayImage {
+                return UIImage(data: imageData)
+            }
+        } else if let imageData = currentItem?.displayImage {
+            return UIImage(data: imageData)
+        }
+        return nil
     }
     
     var body: some View {
         VStack(spacing: 20) {
             // 图片区域
             ZStack {
-                if let image = currentImage {
+                if let image = displayImage {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
@@ -38,7 +50,7 @@ struct TimelinePlayerView: View {
             
             // 台词区域
             ZStack {
-                if let script = currentItem?.script {
+                if let script = (isDragging ? draggedItem?.script : currentItem?.script) {
                     Text(script)
                         .font(.body)
                         .multilineTextAlignment(.center)
@@ -82,9 +94,14 @@ struct TimelinePlayerView: View {
                                             }
                                             let ratio = max(0, min(1, value.location.x / geometry.size.width))
                                             dragTime = ratio * totalDuration
+                                            // 更新拖动时的时间轴项目
+                                            if let provider = currentItem?.provider {
+                                                draggedItem = provider.getItemAt(timestamp: dragTime)
+                                            }
                                         }
                                         .onEnded { _ in
                                             isDragging = false
+                                            draggedItem = nil
                                             onSeek?(dragTime)
                                         }
                                 )
@@ -105,17 +122,10 @@ struct TimelinePlayerView: View {
             .padding(.horizontal)
         }
         .padding(.vertical)
-        .onChange(of: currentItem) { item in
-            // 如果当前项目有图片，则更新图片
-            if let imageData = item?.imageData,
-               let image = UIImage(data: imageData) {
-                currentImage = image
-            }
-            // 如果当前项目没有图片，保持现有图片不变
-        }
-        .onChange(of: currentTime) { _ in
+        .onChange(of: currentItem) { _ in
             if isDragging {
                 isDragging = false
+                draggedItem = nil
             }
         }
     }

@@ -9,7 +9,7 @@ struct BaseRecordingView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var currentTime: Double = 0
-    @State private var currentItem: TimelineItemData?
+    @State private var currentItem: TimelineDisplayData?
     @State private var isRecordingStopped = false
     @State private var isPreviewMode = false
     @State private var recordedDuration: Double = 0

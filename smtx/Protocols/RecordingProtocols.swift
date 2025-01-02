@@ -1,10 +1,30 @@
 import Foundation
 import SwiftUI
 
+struct TimelineDisplayData: Identifiable, Equatable {
+    let id = UUID()
+    let script: String
+    let imageData: Data?
+    let lastImageData: Data?  // 用于存储上一个有图片的时间点的图片
+    let provider: TimelineProvider
+    let timestamp: Double
+    
+    static func == (lhs: TimelineDisplayData, rhs: TimelineDisplayData) -> Bool {
+        return lhs.script == rhs.script &&
+               lhs.imageData == rhs.imageData &&
+               lhs.lastImageData == rhs.lastImageData &&
+               lhs.timestamp == rhs.timestamp
+    }
+    
+    var displayImage: Data? {
+        imageData ?? lastImageData
+    }
+}
+
 protocol TimelineProvider {
     var totalDuration: Double { get }
-    var timelineItems: [TimelineItemData] { get }
-    func getItemAt(timestamp: Double) -> TimelineItemData?
+    var timelineItems: [TimelineDisplayData] { get }
+    func getItemAt(timestamp: Double) -> TimelineDisplayData?
 }
 
 protocol RecordingDelegate {

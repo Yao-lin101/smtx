@@ -16,31 +16,44 @@ class LocalTimelineProvider: TimelineProvider {
         template.totalDuration
     }
     
-    var timelineItems: [TimelineItemData] {
-        sortedItems.map { item in
-            TimelineItemData(
+    var timelineItems: [TimelineDisplayData] {
+        var lastImage: Data? = nil
+        return sortedItems.map { item in
+            if let image = item.image {
+                lastImage = image
+            }
+            return TimelineDisplayData(
                 script: item.script ?? "",
                 imageData: item.image,
-                timestamp: item.timestamp,
-                createdAt: item.createdAt ?? Date(),
-                updatedAt: item.updatedAt ?? Date(),
-                imageUpdatedAt: item.imageUpdatedAt
+                lastImageData: lastImage,
+                provider: self,
+                timestamp: item.timestamp
             )
         }
     }
     
-    func getItemAt(timestamp: Double) -> TimelineItemData? {
-        guard let item = sortedItems.first(where: { Int($0.timestamp) == Int(timestamp) }) else {
+    func getItemAt(timestamp: Double) -> TimelineDisplayData? {
+        guard let currentIndex = sortedItems.lastIndex(where: { $0.timestamp <= timestamp }) else {
             return nil
         }
         
-        return TimelineItemData(
-            script: item.script ?? "",
-            imageData: item.image,
-            timestamp: item.timestamp,
-            createdAt: item.createdAt ?? Date(),
-            updatedAt: item.updatedAt ?? Date(),
-            imageUpdatedAt: item.imageUpdatedAt
+        var lastImageIndex = currentIndex
+        while lastImageIndex >= 0 {
+            if sortedItems[lastImageIndex].image != nil {
+                break
+            }
+            lastImageIndex -= 1
+        }
+        
+        let lastImage = lastImageIndex >= 0 ? sortedItems[lastImageIndex].image : nil
+        let currentItem = sortedItems[currentIndex]
+        
+        return TimelineDisplayData(
+            script: currentItem.script ?? "",
+            imageData: currentItem.image,
+            lastImageData: lastImage,
+            provider: self,
+            timestamp: currentItem.timestamp
         )
     }
 } 
