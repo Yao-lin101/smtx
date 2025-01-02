@@ -62,9 +62,7 @@ class NavigationRouter: ObservableObject {
         case .createTemplate(let sectionId, let templateId):
             CreateTemplateView(sectionId: sectionId, existingTemplateId: templateId)
         case .recording(let templateId, let recordId):
-            if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId) {
-                RecordingView(template: template, recordId: recordId)
-            }
+            LocalRecordingView(templateId: templateId, recordId: recordId)
         case .profile:
             ProfileView()
         case .profileDetail:

@@ -224,7 +224,7 @@ struct BaseRecordingView: View {
         if let item = timelineProvider.timelineItems.first {
             currentItem = item
         }
-        print("🔄 Reset player state: currentTime = 0")
+        print("🔄 Reset player state: currentTime = 0, isPlaying = false")
     }
     
     private func forward15Seconds() {

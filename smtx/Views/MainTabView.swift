@@ -40,9 +40,7 @@ struct MainTabView: View {
                         case .createTemplate(let sectionId, let templateId):
                             CreateTemplateView(sectionId: sectionId, existingTemplateId: templateId)
                         case .recording(let templateId, let recordId):
-                            if let template = try? TemplateStorage.shared.loadTemplate(templateId: templateId) {
-                                RecordingView(template: template, recordId: recordId)
-                            }
+                            LocalRecordingView(templateId: templateId, recordId: recordId)
                         case .profile, .profileDetail, .settings, .help, .about, .avatarPreview, .emailRegister,
                              .cloudTemplateDetail, .adminPanel, .adminUsers, .adminLanguageSections:
                             // 这些路由在本地模板页面不需要处理
