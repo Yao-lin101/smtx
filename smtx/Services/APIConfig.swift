@@ -78,5 +78,9 @@ struct APIConfig {
         "\(baseHost)/media/templates/\(templateUid)/images/\(imageName)"
     }
     
+    func uploadRecordingURL(templateUid: String) -> String {
+        "\(baseURL)/templates/\(templateUid)/recordings/"
+    }
+    
     private init() {}
 } 

@@ -305,4 +305,8 @@ struct TimelineEvent: Codable, Identifiable {
     let image: String?
     
     var id: Double { time }
+}
+
+struct RecordingUploadResponse: Codable {
+    let message: String
 } 

@@ -554,4 +554,37 @@ class CloudTemplateService {
         print("✅ 完成模板排序，返回结果")
         return sortedTemplates
     }
+    
+    func uploadRecording(templateUid: String, audioData: Data, duration: Double) async throws -> String {
+        print("🚀 开始上传录音")
+        print("  - 模板ID: \(templateUid)")
+        print("  - 录音时长: \(duration)秒")
+        print("  - 音频大小: \(audioData.count)字节")
+        
+        let formData = MultipartFormData()
+        
+        // 添加音频文件
+        formData.append(
+            audioData,
+            withName: "audio_file",
+            fileName: "recording.m4a",
+            mimeType: "audio/m4a"
+        )
+        
+        // 添加时长
+        formData.append(
+            "\(Int(duration))".data(using: .utf8)!,
+            withName: "duration"
+        )
+        
+        print("📤 Sending recording to: \(apiConfig.uploadRecordingURL(templateUid: templateUid))")
+        
+        let response: RecordingUploadResponse = try await networkService.uploadFormData(
+            apiConfig.uploadRecordingURL(templateUid: templateUid),
+            formData
+        )
+        
+        print("✅ 录音上传成功")
+        return response.message
+    }
 }
