@@ -17,7 +17,6 @@ struct BaseRecordingView: View {
     @State private var showingDeleteAlert = false
     @State private var showingWaveform = false
     @State private var timer: Timer?
-    @State private var isPlaying = false
     
     init(timelineProvider: TimelineProvider,
          delegate: RecordingDelegate,
@@ -55,9 +54,9 @@ struct BaseRecordingView: View {
                 RecordingControlsView(
                     mode: isPreviewMode ? .preview : .recording,
                     isRecording: audioRecorder.isRecording,
-                    isPlaying: isPlaying,
+                    isPlaying: previewPlayer?.isPlaying == true,
                     onRecordTap: audioRecorder.isRecording ? stopRecording : startRecording,
-                    onPlayTap: isPlaying ? pausePreview : startPreview,
+                    onPlayTap: previewPlayer?.isPlaying == true ? pausePreview : startPreview,
                     onBackward: backward15Seconds,
                     onForward: forward15Seconds,
                     onDelete: { showingDeleteAlert = true },
@@ -186,7 +185,6 @@ struct BaseRecordingView: View {
         player.prepareToPlay()
         
         player.play()
-        isPlaying = true
         print("⏱️ Starting timer for playback tracking")
         
         timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { _ in
@@ -205,7 +203,6 @@ struct BaseRecordingView: View {
         previewPlayer?.pause()
         timer?.invalidate()
         timer = nil
-        isPlaying = false
     }
     
     private func stopPreview() {
@@ -213,7 +210,6 @@ struct BaseRecordingView: View {
         previewPlayer?.stop()
         timer?.invalidate()
         timer = nil
-        isPlaying = false
         
         // 重置状态
         currentTime = 0
