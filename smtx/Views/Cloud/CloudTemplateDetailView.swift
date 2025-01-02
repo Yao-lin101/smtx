@@ -82,6 +82,16 @@ struct CloudTemplateDetailView: View {
     private func loadTimelineData(from urlString: String) {
         print("🔄 开始加载时间轴数据: \(urlString)")
         Task {
+            // Try to get from cache first
+            if let template = viewModel.selectedTemplate,
+               let cachedData = await TimelineCache.shared.get(for: template.uid) {
+                print("📦 Using cached timeline data for template: \(template.uid)")
+                await MainActor.run {
+                    timelineData = cachedData
+                }
+                return
+            }
+            
             do {
                 guard let url = URL(string: urlString) else {
                     print("❌ 无效的时间轴URL")
@@ -102,6 +112,11 @@ struct CloudTemplateDetailView: View {
                 print("  - 总时长: \(timeline.duration)")
                 print("  - 事件数量: \(timeline.events.count)")
                 print("  - 图片数量: \(timeline.images.count)")
+                
+                // Cache the decoded data
+                if let template = viewModel.selectedTemplate {
+                    await TimelineCache.shared.set(timeline, for: template.uid)
+                }
                 
                 // 加载时间轴图片
                 if !timeline.images.isEmpty {

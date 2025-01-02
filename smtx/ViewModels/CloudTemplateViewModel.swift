@@ -227,6 +227,8 @@ class CloudTemplateViewModel: ObservableObject {
             do {
                 print("🔄 开始加载模板详情: \(uid)")
                 selectedTemplate = try await service.fetchTemplate(uid: uid)
+                // Clear timeline cache when template is loaded
+                await TimelineCache.shared.clear(for: uid)
                 print("✅ 模板加载成功:")
                 print("- 标题: \(selectedTemplate?.title ?? "")")
                 print("- 作者: \(selectedTemplate?.authorName ?? "未知")")
