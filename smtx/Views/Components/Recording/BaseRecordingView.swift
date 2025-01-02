@@ -17,6 +17,7 @@ struct BaseRecordingView: View {
     @State private var showingDeleteAlert = false
     @State private var showingWaveform = false
     @State private var timer: Timer?
+    @State private var wasPlayingBeforeDrag = false
     
     init(timelineProvider: TimelineProvider,
          delegate: RecordingDelegate,
@@ -32,7 +33,32 @@ struct BaseRecordingView: View {
             TimelinePlayerView(
                 currentTime: currentTime,
                 totalDuration: isPreviewMode ? recordedDuration : timelineProvider.totalDuration,
-                currentItem: currentItem
+                currentItem: currentItem,
+                isPreviewMode: isPreviewMode,
+                onSeek: { newTime in
+                    if let player = previewPlayer {
+                        print("🎯 Seeking to time: \(newTime)")
+                        player.currentTime = newTime
+                        currentTime = newTime
+                        updateTimelineContent()
+                        if wasPlayingBeforeDrag {
+                            print("▶️ Resuming playback after seeking")
+                            player.play()
+                            startPlaybackTimer()
+                        }
+                    }
+                },
+                onDragStart: {
+                    if let player = previewPlayer {
+                        wasPlayingBeforeDrag = player.isPlaying
+                        if player.isPlaying {
+                            print("⏸️ Pausing playback for seeking")
+                            player.pause()
+                            timer?.invalidate()
+                            timer = nil
+                        }
+                    }
+                }
             )
             
             Spacer()
@@ -186,16 +212,7 @@ struct BaseRecordingView: View {
         
         player.play()
         print("⏱️ Starting timer for playback tracking")
-        
-        timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { _ in
-            currentTime = player.currentTime
-            updateTimelineContent()
-            
-            if currentTime >= recordedDuration {
-                print("🏁 Reached end of recording (currentTime: \(currentTime), duration: \(recordedDuration))")
-                stopPreview()
-            }
-        }
+        startPlaybackTimer()
     }
     
     private func pausePreview() {
@@ -301,6 +318,21 @@ struct BaseRecordingView: View {
                 }
             } catch {
                 print("❌ Failed to delete recording: \(error)")
+            }
+        }
+    }
+    
+    private func startPlaybackTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { _ in
+            if let player = previewPlayer {
+                currentTime = player.currentTime
+                updateTimelineContent()
+                
+                if currentTime >= recordedDuration {
+                    print("🏁 Reached end of recording (currentTime: \(currentTime), duration: \(recordedDuration))")
+                    stopPreview()
+                }
             }
         }
     }

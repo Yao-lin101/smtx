@@ -4,10 +4,15 @@ struct TimelinePlayerView: View {
     let currentTime: Double
     let totalDuration: Double
     let currentItem: TimelineItemData?
+    let isPreviewMode: Bool
+    let onSeek: ((Double) -> Void)?
+    let onDragStart: (() -> Void)?
     @State private var currentImage: UIImage?
+    @State private var isDragging = false
+    @State private var dragTime: Double = 0
     
     private var progress: Double {
-        totalDuration > 0 ? currentTime / totalDuration : 0
+        totalDuration > 0 ? (isDragging ? dragTime : currentTime) / totalDuration : 0
     }
     
     var body: some View {
@@ -59,14 +64,38 @@ struct TimelinePlayerView: View {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(Color.accentColor)
                             .frame(width: geometry.size.width * progress, height: 4)
-                            .animation(.linear(duration: 0.1), value: progress)
+                            .animation(isDragging ? nil : .linear(duration: 0.1), value: progress)
+                        
+                        // 拖动手柄
+                        if isPreviewMode {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 16, height: 16)
+                                .shadow(radius: 2)
+                                .position(x: geometry.size.width * progress, y: 2)
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            if !isDragging {
+                                                isDragging = true
+                                                onDragStart?()
+                                            }
+                                            let ratio = max(0, min(1, value.location.x / geometry.size.width))
+                                            dragTime = ratio * totalDuration
+                                        }
+                                        .onEnded { _ in
+                                            isDragging = false
+                                            onSeek?(dragTime)
+                                        }
+                                )
+                        }
                     }
                 }
                 .frame(height: 4)
                 
                 // 时间显示
                 HStack {
-                    Text(formatTime(currentTime))
+                    Text(formatTime(isDragging ? dragTime : currentTime))
                     Spacer()
                     Text(formatTime(totalDuration))
                 }
@@ -83,6 +112,11 @@ struct TimelinePlayerView: View {
                 currentImage = image
             }
             // 如果当前项目没有图片，保持现有图片不变
+        }
+        .onChange(of: currentTime) { _ in
+            if isDragging {
+                isDragging = false
+            }
         }
     }
     

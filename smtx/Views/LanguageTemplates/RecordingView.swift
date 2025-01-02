@@ -1,3 +1,4 @@
+// 已弃用，新组件为LocalRecordingView
 import SwiftUI
 import AVFoundation
 import CoreData
