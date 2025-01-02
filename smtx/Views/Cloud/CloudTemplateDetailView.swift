@@ -7,6 +7,7 @@ struct CloudTemplateDetailView: View {
     @State private var selectedTab = 0
     @State private var timelineData: TimelineData?
     @State private var timelineImages: [String: Data] = [:]
+    @State private var showingRecordingSheet = false
     
     var body: some View {
         ScrollView {
@@ -56,6 +57,50 @@ struct CloudTemplateDetailView: View {
                         }
                     }
                     
+                    // 根据标签页显示不同的按钮
+                    Group {
+                        switch selectedTab {
+                        case 1: // 评论标签页
+                            Button(action: {
+                                // TODO: 实现评论功能
+                            }) {
+                                HStack {
+                                    Image(systemName: "bubble.left.circle.fill")
+                                        .font(.title2)
+                                    Text("添加评论")
+                                        .font(.headline)
+                                }
+                                .foregroundColor(.accentColor)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            
+                        case 0: // 录音标签页
+                            Button(action: {
+                                showingRecordingSheet = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "mic.circle.fill")
+                                        .font(.title2)
+                                    Text("开始录音")
+                                        .font(.headline)
+                                }
+                                .foregroundColor(.accentColor)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            
+                        default:
+                            EmptyView()
+                        }
+                    }
+                    
                     TabSectionView(selectedTab: $selectedTab)
                 }
                 .padding(.vertical)
@@ -66,6 +111,15 @@ struct CloudTemplateDetailView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingRecordingSheet) {
+            if let timelineData = timelineData {
+                CloudRecordingView(
+                    timelineData: timelineData,
+                    timelineImages: timelineImages,
+                    templateUid: uid
+                )
+            }
+        }
         .onAppear {
             print("🔄 视图出现，加载模板: \(uid)")
             viewModel.loadTemplate(uid)
