@@ -18,6 +18,7 @@ struct BaseRecordingView: View {
     @State private var showingWaveform = false
     @State private var timer: Timer?
     @State private var wasPlayingBeforeDrag = false
+    @State private var playStateVersion = 0
     
     init(timelineProvider: TimelineProvider,
          delegate: RecordingDelegate,
@@ -25,6 +26,10 @@ struct BaseRecordingView: View {
         self.timelineProvider = timelineProvider
         self.delegate = delegate
         self._recordId = State(initialValue: recordId)
+    }
+    
+    private var isPlaying: Bool {
+        previewPlayer?.isPlaying == true
     }
     
     var body: some View {
@@ -80,14 +85,19 @@ struct BaseRecordingView: View {
                 RecordingControlsView(
                     mode: isPreviewMode ? .preview : .recording,
                     isRecording: audioRecorder.isRecording,
-                    isPlaying: previewPlayer?.isPlaying == true,
+                    isPlaying: isPlaying,
                     onRecordTap: audioRecorder.isRecording ? stopRecording : startRecording,
-                    onPlayTap: previewPlayer?.isPlaying == true ? pausePreview : startPreview,
+                    onPlayTap: isPlaying ? pausePreview : startPreview,
                     onBackward: backward15Seconds,
                     onForward: forward15Seconds,
                     onDelete: { showingDeleteAlert = true },
                     onDismiss: { @MainActor in dismiss() }
                 )
+                .onChange(of: previewPlayer?.isPlaying) { isPlaying in
+                    print("🎵 Player state changed - isPlaying: \(String(describing: isPlaying))")
+                    playStateVersion += 1
+                }
+                .id(playStateVersion)
             }
             .padding(.bottom, 40)
         }
@@ -199,6 +209,7 @@ struct BaseRecordingView: View {
     private func startPreview() {
         guard let player = previewPlayer else { return }
         print("▶️ Starting preview at time: \(currentTime)")
+        print("🎵 Before play - isPlaying: \(player.isPlaying)")
         
         do {
             try AVAudioSession.sharedInstance().setActive(true)
@@ -211,15 +222,21 @@ struct BaseRecordingView: View {
         player.prepareToPlay()
         
         player.play()
+        print("🎵 After play - isPlaying: \(player.isPlaying)")
         print("⏱️ Starting timer for playback tracking")
         startPlaybackTimer()
+        playStateVersion += 1
     }
     
     private func pausePreview() {
+        guard let player = previewPlayer else { return }
         print("⏸️ Pausing preview at time: \(currentTime)")
-        previewPlayer?.pause()
+        print("🎵 Before pause - isPlaying: \(player.isPlaying)")
+        player.pause()
+        print("🎵 After pause - isPlaying: \(player.isPlaying)")
         timer?.invalidate()
         timer = nil
+        playStateVersion += 1
     }
     
     private func stopPreview() {
