@@ -154,12 +154,15 @@ class CloudTemplateService {
         }
     }
     
-    func fetchTemplates(languageSectionUid: String? = nil) async throws -> [CloudTemplateListItem] {
+    func fetchTemplates(languageSectionUid: String? = nil, search: String? = nil) async throws -> [CloudTemplateListItem] {
         print("📡 准备请求模板列表")
         var components = URLComponents(string: apiConfig.templatesURL)!
         var queryItems = [URLQueryItem(name: "page", value: "1")]
         if let languageSectionUid = languageSectionUid {
             queryItems.append(URLQueryItem(name: "language_section", value: languageSectionUid))
+        }
+        if let search = search, !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
         }
         components.queryItems = queryItems
         
@@ -175,15 +178,21 @@ class CloudTemplateService {
     }
     
     /// 获取多个语言分区的模板列表（使用逗号分隔的字符串）
-    /// - Parameter sectionUidsString: 逗号分隔的语言分区 UID 字符串
+    /// - Parameters:
+    ///   - sectionUidsString: 逗号分隔的语言分区 UID 字符串
+    ///   - search: 搜索关键词
     /// - Returns: 模板列表
-    func fetchTemplatesForSections(_ sectionUidsString: String) async throws -> [CloudTemplateListItem] {
+    func fetchTemplatesForSections(_ sectionUidsString: String, search: String? = nil) async throws -> [CloudTemplateListItem] {
         print("📡 准备请求多个分区的模板列表")
         var components = URLComponents(string: apiConfig.templatesURL)!
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "page", value: "1"),
             URLQueryItem(name: "language_sections", value: sectionUidsString)
         ]
+        if let search = search, !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+        components.queryItems = queryItems
         
         guard let url = components.url else {
             throw TemplateError.operationFailed("Invalid URL")

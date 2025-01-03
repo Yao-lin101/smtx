@@ -124,9 +124,24 @@ struct CloudTemplatesView: View {
     }
     
     private var searchBarView: some View {
-        SearchBar(text: $searchText)
-            .padding(.horizontal)
-            .padding(.bottom)
+        SearchBar(text: $searchText) {
+            // 当用户按下回车或清除搜索时触发
+            Task {
+                if selectedLanguageUid.isEmpty {
+                    let sectionUids = viewModel.subscribedSections
+                        .map { $0.uid.replacingOccurrences(of: "-", with: "") }
+                        .joined(separator: ",")
+                    await viewModel.loadTemplatesForSections(sectionUids, search: searchText)
+                } else {
+                    await viewModel.loadTemplates(
+                        languageSectionUid: selectedLanguageUid.replacingOccurrences(of: "-", with: ""),
+                        search: searchText
+                    )
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom)
     }
     
     private var contentView: some View {
@@ -134,7 +149,7 @@ struct CloudTemplatesView: View {
             if viewModel.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.filteredTemplates(searchText: searchText).isEmpty {
+            } else if viewModel.templates.isEmpty {
                 emptyStateView
             } else {
                 templateListView
@@ -143,15 +158,15 @@ struct CloudTemplatesView: View {
         .refreshable {
             if !selectedLanguageUid.isEmpty {
                 let formattedUid = selectedLanguageUid.replacingOccurrences(of: "-", with: "")
-                await viewModel.loadTemplates(languageSectionUid: formattedUid)
+                await viewModel.loadTemplates(languageSectionUid: formattedUid, search: searchText)
             } else {
                 let sectionUids = viewModel.subscribedSections
                     .map { $0.uid.replacingOccurrences(of: "-", with: "") }
                     .joined(separator: ",")
                 if !sectionUids.isEmpty {
-                    await viewModel.loadTemplatesForSections(sectionUids)
+                    await viewModel.loadTemplatesForSections(sectionUids, search: searchText)
                 } else {
-                    await viewModel.loadTemplates()
+                    await viewModel.loadTemplates(search: searchText)
                 }
             }
         }
@@ -167,10 +182,10 @@ struct CloudTemplatesView: View {
                 let sectionUids = viewModel.subscribedSections
                     .map { $0.uid.replacingOccurrences(of: "-", with: "") }
                     .joined(separator: ",")
-                await viewModel.loadTemplatesForSections(sectionUids)
+                await viewModel.loadTemplatesForSections(sectionUids, search: searchText)
             } else {
                 // 加载特定分区的模板
-                await viewModel.loadTemplates(languageSectionUid: uid.replacingOccurrences(of: "-", with: ""))
+                await viewModel.loadTemplates(languageSectionUid: uid.replacingOccurrences(of: "-", with: ""), search: searchText)
             }
         }
     }
@@ -200,6 +215,7 @@ struct CloudTemplatesView: View {
     // 添加SearchBar组件
     private struct SearchBar: View {
         @Binding var text: String
+        var onSubmit: () -> Void
         
         var body: some View {
             HStack {
@@ -208,9 +224,13 @@ struct CloudTemplatesView: View {
                 
                 TextField("搜索标题或标签", text: $text)
                     .textFieldStyle(.plain)
+                    .onSubmit(onSubmit)
                 
                 if !text.isEmpty {
-                    Button(action: { text = "" }) {
+                    Button(action: {
+                        text = ""
+                        onSubmit()
+                    }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
                     }

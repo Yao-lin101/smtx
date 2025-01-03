@@ -131,8 +131,10 @@ class CloudTemplateViewModel: ObservableObject {
     // MARK: - Template Loading
     
     /// 加载模板列表
-    /// - Parameter languageSectionUid: 可选的语言分区 UID
-    func loadTemplates(languageSectionUid: String? = nil) async {
+    /// - Parameters:
+    ///   - languageSectionUid: 可选的语言分区 UID
+    ///   - search: 搜索关键词
+    func loadTemplates(languageSectionUid: String? = nil, search: String? = nil) async {
         currentLoadTask?.cancel()
         
         currentLoadTask = Task {
@@ -140,11 +142,7 @@ class CloudTemplateViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                if let uid = languageSectionUid {
-                    templates = try await service.fetchTemplates(languageSectionUid: uid)
-                } else {
-                    templates = try await service.fetchTemplates()
-                }
+                templates = try await service.fetchTemplates(languageSectionUid: languageSectionUid, search: search)
             } catch {
                 if !Task.isCancelled {
                     if let templateError = error as? TemplateError {
@@ -163,14 +161,16 @@ class CloudTemplateViewModel: ObservableObject {
     }
     
     /// 加载多个语言分区的模板（使用逗号分隔的字符串）
-    /// - Parameter sectionUidsString: 逗号分隔的语言分区 UID 字符串
-    func loadTemplatesForSections(_ sectionUidsString: String) async {
+    /// - Parameters:
+    ///   - sectionUidsString: 逗号分隔的语言分区 UID 字符串
+    ///   - search: 搜索关键词
+    func loadTemplatesForSections(_ sectionUidsString: String, search: String? = nil) async {
         currentLoadTask?.cancel()
         
         currentLoadTask = Task {
             isLoading = true
             do {
-                templates = try await service.fetchTemplatesForSections(sectionUidsString)
+                templates = try await service.fetchTemplatesForSections(sectionUidsString, search: search)
             } catch {
                 if !Task.isCancelled {
                     if let templateError = error as? TemplateError {
