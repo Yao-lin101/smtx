@@ -103,7 +103,10 @@ struct CloudTemplateDetailView: View {
                     
                     TabSectionView(
                         selectedTab: $selectedTab,
-                        recordings: template.recordings
+                        recordings: template.recordings,
+                        timelineData: timelineData,
+                        timelineImages: timelineImages,
+                        templateUid: uid
                     )
                 }
                 .padding(.vertical)
@@ -355,6 +358,9 @@ struct InteractionButtonsView: View {
 struct TabSectionView: View {
     @Binding var selectedTab: Int
     let recordings: [TemplateRecording]
+    let timelineData: TimelineData?
+    let timelineImages: [String: Data]
+    let templateUid: String
     
     var body: some View {
         VStack {
@@ -374,7 +380,12 @@ struct TabSectionView: View {
                     } else {
                         VStack(spacing: 8) {
                             ForEach(recordings, id: \.uid) { recording in
-                                RecordingRow(recording: recording)
+                                RecordingRow(
+                                    recording: recording,
+                                    timelineData: timelineData,
+                                    timelineImages: timelineImages,
+                                    templateUid: templateUid
+                                )
                             }
                         }
                     }
@@ -395,7 +406,11 @@ struct TabSectionView: View {
 
 struct RecordingRow: View {
     let recording: TemplateRecording
+    let timelineData: TimelineData?
+    let timelineImages: [String: Data]
+    let templateUid: String
     @State private var avatarImage: UIImage?
+    @State private var showingRecordingPreview = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -439,6 +454,20 @@ struct RecordingRow: View {
         .background(Color(.systemBackground))
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 1)
+        .onTapGesture {
+            showingRecordingPreview = true
+        }
+        .sheet(isPresented: $showingRecordingPreview) {
+            if let timelineData = timelineData {
+                CloudRecordingView(
+                    timelineData: timelineData,
+                    timelineImages: timelineImages,
+                    templateUid: templateUid,
+                    recordingUrl: recording.fullAudioFile,
+                    onSuccess: { _ in }
+                )
+            }
+        }
     }
     
     private func formatDuration(_ seconds: Int) -> String {

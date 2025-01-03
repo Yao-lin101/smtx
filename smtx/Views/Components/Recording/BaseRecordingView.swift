@@ -114,7 +114,6 @@ struct BaseRecordingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if let recordId = recordId {
-                print("📱 Loading recording for preview: \(recordId)")
                 loadRecordingForPreview(recordId: recordId)
             } else {
                 if let firstItem = timelineProvider.timelineItems.first {
@@ -299,7 +298,6 @@ struct BaseRecordingView: View {
         Task {
             do {
                 guard let (audioData, duration) = try await delegate.loadRecording(id: recordId) else {
-                    print("❌ Failed to load recording data")
                     return
                 }
                 

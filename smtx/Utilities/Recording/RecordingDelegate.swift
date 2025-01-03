@@ -82,14 +82,21 @@ class CloudRecordingDelegate: RecordingDelegate {
     private let templateUid: String
     private var _recordingData: (audioData: Data, duration: Double)?
     private let cloudTemplateService: CloudTemplateService
+    private let cacheManager = RecordingCacheManager.shared
+    private let recordingUrl: String?
     
     var recordingData: (Data, Double)? {
         _recordingData
     }
     
-    init(templateUid: String, cloudTemplateService: CloudTemplateService = .shared) {
+    init(templateUid: String, recordingUrl: String? = nil, cloudTemplateService: CloudTemplateService = .shared) {
         self.templateUid = templateUid
+        self.recordingUrl = recordingUrl
         self.cloudTemplateService = cloudTemplateService
+    }
+    
+    func setRecordingData(audioData: Data, duration: Double) {
+        _recordingData = (audioData, duration)
     }
     
     func saveRecording(audioData: Data, duration: Double) async throws -> String {
@@ -110,13 +117,18 @@ class CloudRecordingDelegate: RecordingDelegate {
     }
     
     func loadRecording(id: String) async throws -> (Data, Double)? {
-        // 从缓存中加载
-        let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(id).m4a")
-        guard let audioData = try? Data(contentsOf: cacheURL) else { return nil }
+        // 如果已经有缓存的数据，直接返回
+        if let recordingData = _recordingData {
+            return recordingData
+        }
         
-        // 获取音频时长
-        let player = try AVAudioPlayer(data: audioData)
-        return (audioData, player.duration)
+        // 否则尝试从 URL 加载
+        if let recordingUrl = recordingUrl,
+           let url = URL(string: recordingUrl) {
+            return try await cacheManager.loadRecording(from: url)
+        }
+        
+        return nil
     }
     
     func uploadRecording(forceOverride: Bool = false) async throws -> String {

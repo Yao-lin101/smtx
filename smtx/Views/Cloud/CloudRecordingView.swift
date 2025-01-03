@@ -5,34 +5,68 @@ struct CloudRecordingView: View {
     let timelineData: TimelineData
     let timelineImages: [String: Data]
     let templateUid: String
+    let recordingUrl: String?
     let onSuccess: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var isUploading = false
     @State private var showingOverrideAlert = false
     @State private var pendingRecordingData: (Data, Double)?
+    @State private var isPreviewMode = false
+    @State private var recordId: String?
+    @State private var isLoading = true
     
     private let timelineProvider: CloudTimelineProvider
     private let recordingDelegate: CloudRecordingDelegate
     
-    init(timelineData: TimelineData, timelineImages: [String: Data], templateUid: String, onSuccess: @escaping (String) -> Void) {
+    init(timelineData: TimelineData, timelineImages: [String: Data], templateUid: String, recordingUrl: String? = nil, onSuccess: @escaping (String) -> Void) {
         self.timelineData = timelineData
         self.timelineImages = timelineImages
         self.templateUid = templateUid
+        self.recordingUrl = recordingUrl
         self.onSuccess = onSuccess
         self.timelineProvider = CloudTimelineProvider(timelineData: timelineData, timelineImages: timelineImages)
-        self.recordingDelegate = CloudRecordingDelegate(templateUid: templateUid)
+        self.recordingDelegate = CloudRecordingDelegate(templateUid: templateUid, recordingUrl: recordingUrl)
     }
     
     var body: some View {
-        BaseRecordingView(
-            timelineProvider: timelineProvider,
-            delegate: recordingDelegate,
-            onUpload: {
-                guard !isUploading else { return }
-                isUploading = true
-            },
-            isUploading: isUploading
-        )
+        Group {
+            if isLoading {
+                ProgressView()
+            } else {
+                BaseRecordingView(
+                    timelineProvider: timelineProvider,
+                    delegate: recordingDelegate,
+                    recordId: recordId,
+                    onUpload: {
+                        guard !isUploading else { return }
+                        isUploading = true
+                    },
+                    isUploading: isUploading
+                )
+            }
+        }
+        .task {
+            if let recordingUrl = recordingUrl,
+               let url = URL(string: recordingUrl) {
+                do {
+                    let (audioData, duration) = try await RecordingCacheManager.shared.loadRecording(from: url)
+                    await MainActor.run {
+                        recordingDelegate.setRecordingData(audioData: audioData, duration: duration)
+                        recordId = UUID().uuidString
+                        isLoading = false
+                    }
+                } catch {
+                    print("❌ Failed to load recording: \(error)")
+                    await MainActor.run {
+                        isLoading = false
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    isLoading = false
+                }
+            }
+        }
         .onChange(of: isUploading) { uploading in
             if uploading {
                 Task {
