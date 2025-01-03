@@ -68,7 +68,7 @@ class CloudTimelineProvider: TimelineProvider {
     }
     
     var timelineItems: [TimelineDisplayData] {
-        items
+        items.sorted { $0.timestamp < $1.timestamp }
     }
     
     init(timelineData: TimelineData, timelineImages: [String: Data]) {
