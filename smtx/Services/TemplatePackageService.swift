@@ -36,6 +36,16 @@ class TemplatePackageService {
         timelineImages: [String: Data],
         version: String
     ) throws -> Data {
+        // 缩放图片
+        let resizedCoverImage = try ImageResizer.resizeCoverImage(coverImage)
+        let resizedCoverThumbnail = try ImageResizer.resizeCoverImage(coverThumbnail)
+        
+        // 缩放时间轴图片
+        var resizedTimelineImages: [String: Data] = [:]
+        for (name, imageData) in timelineImages {
+            resizedTimelineImages[name] = try ImageResizer.resizeTimelineImage(imageData)
+        }
+        
         // 创建临时文件
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
         
@@ -62,12 +72,12 @@ class TemplatePackageService {
             try archive.addEntry(
                 with: coverOriginalName,
                 type: .file,
-                uncompressedSize: Int64(coverImage.count),
+                uncompressedSize: Int64(resizedCoverImage.count),
                 bufferSize: Int(4096),
                 provider: { (position: Int64, size: Int) -> Data in
                     let start = Int(position)
-                    let end = min(start + size, coverImage.count)
-                    return coverImage.subdata(in: start..<end)
+                    let end = min(start + size, resizedCoverImage.count)
+                    return resizedCoverImage.subdata(in: start..<end)
                 }
             )
             
@@ -75,12 +85,12 @@ class TemplatePackageService {
             try archive.addEntry(
                 with: coverThumbnailName,
                 type: .file,
-                uncompressedSize: Int64(coverThumbnail.count),
+                uncompressedSize: Int64(resizedCoverThumbnail.count),
                 bufferSize: Int(4096),
                 provider: { (position: Int64, size: Int) -> Data in
                     let start = Int(position)
-                    let end = min(start + size, coverThumbnail.count)
-                    return coverThumbnail.subdata(in: start..<end)
+                    let end = min(start + size, resizedCoverThumbnail.count)
+                    return resizedCoverThumbnail.subdata(in: start..<end)
                 }
             )
             
@@ -98,7 +108,7 @@ class TemplatePackageService {
             )
             
             // 添加时间轴图片
-            for (name, data) in timelineImages {
+            for (name, data) in resizedTimelineImages {
                 try archive.addEntry(
                     with: "images/\(name)",
                     type: .file,
@@ -179,6 +189,19 @@ class TemplatePackageService {
         timelineImages: [String: Data]?,
         version: String
     ) throws -> Data {
+        // 缩放图片
+        let resizedCoverImage = coverImage != nil ? try ImageResizer.resizeCoverImage(coverImage!) : nil
+        let resizedCoverThumbnail = coverThumbnail != nil ? try ImageResizer.resizeCoverImage(coverThumbnail!) : nil
+        
+        // 缩放时间轴图片
+        var resizedTimelineImages: [String: Data]?
+        if let timelineImages = timelineImages {
+            resizedTimelineImages = [:]
+            for (name, imageData) in timelineImages {
+                resizedTimelineImages?[name] = try ImageResizer.resizeTimelineImage(imageData)
+            }
+        }
+        
         // 创建临时文件
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
         
@@ -202,7 +225,7 @@ class TemplatePackageService {
             let timelineName = getVersionedFileName(baseName: "timelines.json", version: version)
             
             // 添加封面图片
-            if let coverImage = coverImage {
+            if let coverImage = resizedCoverImage {
                 try archive.addEntry(
                     with: coverOriginalName,
                     type: .file,
@@ -217,7 +240,7 @@ class TemplatePackageService {
             }
             
             // 添加封面缩略图
-            if let coverThumbnail = coverThumbnail {
+            if let coverThumbnail = resizedCoverThumbnail {
                 try archive.addEntry(
                     with: coverThumbnailName,
                     type: .file,
@@ -247,7 +270,7 @@ class TemplatePackageService {
             }
             
             // 时间轴图片保持原有命名方式
-            if let timelineImages = timelineImages {
+            if let timelineImages = resizedTimelineImages {
                 for (imageName, imageData) in timelineImages {
                     try archive.addEntry(
                         with: "images/\(imageName)",
