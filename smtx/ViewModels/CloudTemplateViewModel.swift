@@ -162,6 +162,31 @@ class CloudTemplateViewModel: ObservableObject {
         await currentLoadTask?.value
     }
     
+    /// 加载多个语言分区的模板（使用逗号分隔的字符串）
+    /// - Parameter sectionUidsString: 逗号分隔的语言分区 UID 字符串
+    func loadTemplatesForSections(_ sectionUidsString: String) async {
+        currentLoadTask?.cancel()
+        
+        currentLoadTask = Task {
+            isLoading = true
+            do {
+                templates = try await service.fetchTemplatesForSections(sectionUidsString)
+            } catch {
+                if !Task.isCancelled {
+                    if let templateError = error as? TemplateError {
+                        errorMessage = templateError.localizedDescription
+                    } else {
+                        errorMessage = error.localizedDescription
+                    }
+                    showError = true
+                }
+            }
+            isLoading = false
+        }
+        
+        await currentLoadTask?.value
+    }
+    
     /// 加载多个语言分区的模板
     /// - Parameter languageSectionUids: 语言分区 UID 数组
     func loadTemplates(languageSectionUids: [String]) async {
@@ -377,7 +402,7 @@ class CloudTemplateViewModel: ObservableObject {
         }
     }
     
-    // 添加新方法
+    // 修改 loadInitialTemplates 方法
     func loadInitialTemplates(selectedLanguageUid: String) async {
         guard !hasLoadedTemplates else { return }
         
@@ -385,9 +410,11 @@ class CloudTemplateViewModel: ObservableObject {
             let formattedUid = selectedLanguageUid.replacingOccurrences(of: "-", with: "")
             await loadTemplates(languageSectionUid: formattedUid)
         } else {
-            let subscribedUids = subscribedSections.map { $0.uid.replacingOccurrences(of: "-", with: "") }
-            if !subscribedUids.isEmpty {
-                await loadTemplates(languageSectionUids: subscribedUids)
+            let sectionUids = subscribedSections
+                .map { $0.uid.replacingOccurrences(of: "-", with: "") }
+                .joined(separator: ",")
+            if !sectionUids.isEmpty {
+                await loadTemplatesForSections(sectionUids)
             } else {
                 await loadTemplates()
             }

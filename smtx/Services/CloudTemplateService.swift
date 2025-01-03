@@ -154,49 +154,46 @@ class CloudTemplateService {
         }
     }
     
-    func fetchTemplates(languageSectionUid: String? = nil, search: String? = nil, page: Int = 1) async throws -> [CloudTemplateListItem] {
+    func fetchTemplates(languageSectionUid: String? = nil) async throws -> [CloudTemplateListItem] {
         print("📡 准备请求模板列表")
-        var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
+        var components = URLComponents(string: apiConfig.templatesURL)!
+        var queryItems = [URLQueryItem(name: "page", value: "1")]
         if let languageSectionUid = languageSectionUid {
             queryItems.append(URLQueryItem(name: "language_section", value: languageSectionUid))
-            print("📍 添加语言分区参数: \(languageSectionUid)")
         }
-        if let search = search {
-            queryItems.append(URLQueryItem(name: "search", value: search))
-            print("🔍 添加搜索参数: \(search)")
+        components.queryItems = queryItems
+        
+        guard let url = components.url else {
+            throw TemplateError.operationFailed("Invalid URL")
         }
         
-        let urlString = apiConfig.templatesURL + "?" + queryItems.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
-        print("🌐 请求URL: \(urlString)")
+        let response: PaginatedResponse<CloudTemplateListItem> = try await networkService.get(
+            url.absoluteString,
+            decoder: DateDecoder.decoder
+        )
+        return response.results
+    }
+    
+    /// 获取多个语言分区的模板列表（使用逗号分隔的字符串）
+    /// - Parameter sectionUidsString: 逗号分隔的语言分区 UID 字符串
+    /// - Returns: 模板列表
+    func fetchTemplatesForSections(_ sectionUidsString: String) async throws -> [CloudTemplateListItem] {
+        print("📡 准备请求多个分区的模板列表")
+        var components = URLComponents(string: apiConfig.templatesURL)!
+        components.queryItems = [
+            URLQueryItem(name: "page", value: "1"),
+            URLQueryItem(name: "language_sections", value: sectionUidsString)
+        ]
         
-        do {
-            print("📥 开始网络请求")
-            let response: PaginatedResponse<CloudTemplateListItem> = try await networkService.get(
-                urlString,
-                decoder: DateDecoder.decoder
-            )
-            print("✅ 请求成功，返回模板数量: \(response.results.count)")
-            return response.results
-        } catch let error as NetworkError {
-            print("❌ 网络错误: \(error)")
-            switch error {
-            case .serverError(let message):
-                print("⚠️ 服务器错误: \(message)")
-                throw TemplateError.serverError(message)
-            case .unauthorized:
-                print("🔒 未授权错误")
-                throw TemplateError.unauthorized
-            case .networkError(let error):
-                print("🌐 网络错误: \(error)")
-                throw TemplateError.networkError(error.localizedDescription)
-            case .decodingError:
-                print("📦 解码错误")
-                throw TemplateError.decodingError
-            default:
-                print("❓ 未知错误")
-                throw TemplateError.templateNotFound
-            }
+        guard let url = components.url else {
+            throw TemplateError.operationFailed("Invalid URL")
         }
+        
+        let response: PaginatedResponse<CloudTemplateListItem> = try await networkService.get(
+            url.absoluteString,
+            decoder: DateDecoder.decoder
+        )
+        return response.results
     }
     
     func likeTemplate(uid: String) async throws -> Bool {

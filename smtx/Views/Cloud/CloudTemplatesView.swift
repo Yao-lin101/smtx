@@ -141,14 +141,15 @@ struct CloudTemplatesView: View {
             }
         }
         .refreshable {
-            // 只刷新当前分区的模板
             if !selectedLanguageUid.isEmpty {
                 let formattedUid = selectedLanguageUid.replacingOccurrences(of: "-", with: "")
                 await viewModel.loadTemplates(languageSectionUid: formattedUid)
             } else {
-                let subscribedUids = viewModel.subscribedSections.map { $0.uid.replacingOccurrences(of: "-", with: "") }
-                if !subscribedUids.isEmpty {
-                    await viewModel.loadTemplates(languageSectionUids: subscribedUids)
+                let sectionUids = viewModel.subscribedSections
+                    .map { $0.uid.replacingOccurrences(of: "-", with: "") }
+                    .joined(separator: ",")
+                if !sectionUids.isEmpty {
+                    await viewModel.loadTemplatesForSections(sectionUids)
                 } else {
                     await viewModel.loadTemplates()
                 }
@@ -162,11 +163,13 @@ struct CloudTemplatesView: View {
         selectedLanguageUid = uid
         Task {
             if uid.isEmpty {
-                // 加载所有订阅分区的模板
-                let sectionUids = viewModel.subscribedSections.map { $0.uid.replacingOccurrences(of: "-", with: "") }
-                await viewModel.loadTemplates(languageSectionUids: sectionUids)
+                // 加载所有订阅分区的模板，使用单个请求
+                let sectionUids = viewModel.subscribedSections
+                    .map { $0.uid.replacingOccurrences(of: "-", with: "") }
+                    .joined(separator: ",")
+                await viewModel.loadTemplatesForSections(sectionUids)
             } else {
-                // 加载特定分区的模板，使用 UID
+                // 加载特定分区的模板
                 await viewModel.loadTemplates(languageSectionUid: uid.replacingOccurrences(of: "-", with: ""))
             }
         }
@@ -176,7 +179,14 @@ struct CloudTemplatesView: View {
         if !selectedLanguageUid.isEmpty && !sections.contains(where: { $0.uid == selectedLanguageUid }) {
             selectedLanguageUid = ""
             Task {
-                await viewModel.loadTemplates()
+                let sectionUids = sections
+                    .map { $0.uid.replacingOccurrences(of: "-", with: "") }
+                    .joined(separator: ",")
+                if !sectionUids.isEmpty {
+                    await viewModel.loadTemplatesForSections(sectionUids)
+                } else {
+                    await viewModel.loadTemplates()
+                }
             }
         }
     }
