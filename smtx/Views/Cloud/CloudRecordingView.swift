@@ -120,6 +120,15 @@ struct CloudRecordingView: View {
         } message: {
             Text("您已经上传过录音，是否要覆盖现有录音？")
         }
+        .onDisappear {
+            if !isUploading && recordingUrl == nil {
+                if let recordId = recordId {
+                    Task {
+                        try? await recordingDelegate.deleteRecording(id: recordId)
+                    }
+                }
+            }
+        }
         .toastManager()
     }
 } 
