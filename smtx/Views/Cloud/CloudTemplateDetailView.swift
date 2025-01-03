@@ -112,13 +112,7 @@ struct CloudTemplateDetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingRecordingSheet) {
-            if let timelineData = timelineData {
-                CloudRecordingView(
-                    timelineData: timelineData,
-                    timelineImages: timelineImages,
-                    templateUid: uid
-                )
-            }
+            recordingSheet
         }
         .onAppear {
             print("🔄 视图出现，加载模板: \(uid)")
@@ -131,6 +125,7 @@ struct CloudTemplateDetailView: View {
                 loadTimelineData(from: template.fullTimelineFile)
             }
         }
+        .toastManager()
     }
     
     private func loadTimelineData(from urlString: String) {
@@ -223,6 +218,23 @@ struct CloudTemplateDetailView: View {
         // 更新状态
         await MainActor.run {
             timelineImages = images
+        }
+    }
+    
+    var recordingSheet: some View {
+        Group {
+            if let timelineData = timelineData {
+                CloudRecordingView(
+                    timelineData: timelineData,
+                    timelineImages: timelineImages,
+                    templateUid: uid,
+                    onSuccess: { message in
+                        ToastManager.shared.show(message)
+                    }
+                )
+            } else {
+                ProgressView()
+            }
         }
     }
 }
