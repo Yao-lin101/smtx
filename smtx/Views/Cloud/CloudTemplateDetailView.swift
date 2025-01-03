@@ -236,6 +236,7 @@ struct CloudTemplateDetailView: View {
                     templateUid: uid,
                     onSuccess: { message in
                         ToastManager.shared.show(message)
+                        viewModel.loadTemplate(uid)
                     }
                 )
             } else {
