@@ -157,14 +157,6 @@ struct TemplateRecording: Codable, Equatable {
     let duration: Int
     let createdAt: Date
     
-    enum CodingKeys: String, CodingKey {
-        case uid
-        case userUid = "user_uid"
-        case audioFile = "audio_file"
-        case duration
-        case createdAt = "created_at"
-    }
-    
     var fullAudioFile: String {
         APIConfig.shared.mediaURL(audioFile)
     }

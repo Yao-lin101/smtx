@@ -35,10 +35,8 @@ struct CloudRecordingView: View {
                         let message = try await recordingDelegate.uploadRecording()
                         await MainActor.run {
                             isUploading = false
+                            ToastManager.shared.show(message)
                             dismiss()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                ToastManager.shared.show(message)
-                            }
                         }
                     } catch {
                         await MainActor.run {

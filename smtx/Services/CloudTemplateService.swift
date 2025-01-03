@@ -588,12 +588,6 @@ class CloudTemplateService {
         )
         
         print("✅ 录音上传成功")
-        
-        // 使用 ToastManager 显示成功消息
-        DispatchQueue.main.async {
-            ToastManager.shared.show(response.message)
-        }
-        
         return response.message
     }
 }
