@@ -478,12 +478,11 @@ struct RecordingRow: View {
         }
         .sheet(isPresented: $showingRecordingPreview) {
             if let timelineData = timelineData {
-                CloudRecordingView(
+                CloudRecordingPreviewView(
                     timelineData: timelineData,
                     timelineImages: timelineImages,
-                    templateUid: templateUid,
                     recordingUrl: recording.fullAudioFile,
-                    onSuccess: { _ in }
+                    templateUid: templateUid
                 )
             }
         }

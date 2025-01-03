@@ -6,6 +6,8 @@ struct BaseRecordingView: View {
     let delegate: RecordingDelegate
     var onUpload: (() -> Void)?
     let isUploading: Bool
+    let showDeleteButton: Bool
+    let showUploadButton: Bool
     
     @Environment(\.dismiss) private var dismiss
     @StateObject private var audioRecorder = AudioRecorder()
@@ -27,13 +29,17 @@ struct BaseRecordingView: View {
         delegate: RecordingDelegate,
         recordId: String? = nil,
         onUpload: (() -> Void)? = nil,
-        isUploading: Bool = false
+        isUploading: Bool = false,
+        showDeleteButton: Bool = true,
+        showUploadButton: Bool = true
     ) {
         self.timelineProvider = timelineProvider
         self.delegate = delegate
         self.recordId = recordId
         self.onUpload = onUpload
         self.isUploading = isUploading
+        self.showDeleteButton = showDeleteButton
+        self.showUploadButton = showUploadButton
     }
     
     private var isPlaying: Bool {
@@ -101,7 +107,9 @@ struct BaseRecordingView: View {
                     onDelete: { showingDeleteAlert = true },
                     onDismiss: { @MainActor in dismiss() },
                     onUpload: onUpload,
-                    isUploading: isUploading
+                    isUploading: isUploading,
+                    showDeleteButton: showDeleteButton,
+                    showUploadButton: showUploadButton
                 )
                 .onChange(of: previewPlayer?.isPlaying) { isPlaying in
                     print("🎵 Player state changed - isPlaying: \(String(describing: isPlaying))")

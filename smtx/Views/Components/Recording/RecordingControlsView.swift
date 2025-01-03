@@ -18,16 +18,20 @@ struct RecordingControlsView: View {
     let onDismiss: () -> Void
     var onUpload: (() -> Void)?
     let isUploading: Bool
+    let showDeleteButton: Bool
+    let showUploadButton: Bool
     
     var body: some View {
         HStack(spacing: 40) {
             if mode == .preview {
                 Group {
                     // 删除按钮
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.title)
-                            .foregroundColor(.blue)
+                    if showDeleteButton {
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .font(.title)
+                                .foregroundColor(.blue)
+                        }
                     }
                     
                     // 后退15秒
@@ -49,18 +53,20 @@ struct RecordingControlsView: View {
                     }
                     
                     // 完成按钮
-                    Button(action: {
-                        if let onUpload = onUpload {
-                            onUpload()
-                        } else {
-                            onDismiss()
+                    if showUploadButton {
+                        Button(action: {
+                            if let onUpload = onUpload {
+                                onUpload()
+                            } else {
+                                onDismiss()
+                            }
+                        }) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title)
+                                .foregroundColor(isUploading ? .gray : .blue)
                         }
-                    }) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title)
-                            .foregroundColor(isUploading ? .gray : .blue)
+                        .disabled(isUploading)
                     }
-                    .disabled(isUploading)
                 }
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.3)
