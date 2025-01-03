@@ -422,4 +422,11 @@ class CloudTemplateViewModel: ObservableObject {
         
         hasLoadedTemplates = true
     }
+    
+    @MainActor
+    func deleteRecording(templateUid: String, recordingUid: String) async throws {
+        try await service.deleteRecording(templateUid: templateUid, recordingUid: recordingUid)
+        // 重新加载模板数据以更新录音列表
+        loadTemplate(templateUid)
+    }
 } 

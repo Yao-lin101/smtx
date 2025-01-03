@@ -612,4 +612,10 @@ class CloudTemplateService {
         print("✅ 录音上传成功")
         return response.message
     }
+    
+    func deleteRecording(templateUid: String, recordingUid: String) async throws {
+        try await networkService.deleteNoContent(
+            apiConfig.templateRecordingURL(templateUid: templateUid, recordingId: recordingUid)
+        )
+    }
 }

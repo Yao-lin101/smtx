@@ -108,6 +108,7 @@ struct CloudTemplateDetailView: View {
                         timelineImages: timelineImages,
                         templateUid: uid
                     )
+                    .environmentObject(viewModel)
                 }
                 .padding(.vertical)
             } else {
@@ -362,6 +363,7 @@ struct TabSectionView: View {
     let timelineData: TimelineData?
     let timelineImages: [String: Data]
     let templateUid: String
+    @EnvironmentObject private var viewModel: CloudTemplateViewModel
     
     var body: some View {
         VStack {
@@ -387,6 +389,7 @@ struct TabSectionView: View {
                                     timelineImages: timelineImages,
                                     templateUid: templateUid
                                 )
+                                .environmentObject(viewModel)
                             }
                         }
                     }
@@ -412,6 +415,8 @@ struct RecordingRow: View {
     let templateUid: String
     @State private var avatarImage: UIImage?
     @State private var showingRecordingPreview = false
+    @State private var showingDeleteAlert = false
+    @EnvironmentObject private var viewModel: CloudTemplateViewModel
     
     var body: some View {
         HStack(spacing: 12) {
@@ -448,6 +453,19 @@ struct RecordingRow: View {
             
             Spacer()
             
+            // 删除按钮
+            if let currentUser = UserStore.shared.currentUser,
+               let template = viewModel.selectedTemplate,
+               recording.userUid == currentUser.uid || template.authorUid == currentUser.uid {
+                Button {
+                    showingDeleteAlert = true
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.plain)
+            }
+            
             Image(systemName: "chevron.right")
                 .foregroundColor(.secondary)
         }
@@ -468,6 +486,21 @@ struct RecordingRow: View {
                     onSuccess: { _ in }
                 )
             }
+        }
+        .alert("确认删除", isPresented: $showingDeleteAlert) {
+            Button("删除", role: .destructive) {
+                Task {
+                    do {
+                        try await viewModel.deleteRecording(templateUid: templateUid, recordingUid: recording.uid)
+                        ToastManager.shared.show("录音已删除")
+                    } catch {
+                        ToastManager.shared.show(error.localizedDescription, type: .error)
+                    }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("确定要删除这条录音吗？此操作不可恢复。")
         }
     }
     
