@@ -67,7 +67,7 @@ struct CloudTemplateDetailView: View {
                                 HStack {
                                     Image(systemName: "bubble.left.circle.fill")
                                         .font(.title2)
-                                    Text("添加评论")
+                                    Text("我喵两句")
                                         .font(.headline)
                                 }
                                 .foregroundColor(.accentColor)
@@ -85,7 +85,7 @@ struct CloudTemplateDetailView: View {
                                 HStack {
                                     Image(systemName: "mic.circle.fill")
                                         .font(.title2)
-                                    Text("开始录音")
+                                    Text("开始表演")
                                         .font(.headline)
                                 }
                                 .foregroundColor(.accentColor)
