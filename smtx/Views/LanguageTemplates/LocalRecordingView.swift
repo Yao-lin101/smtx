@@ -11,7 +11,8 @@ struct LocalRecordingView: View {
                 BaseRecordingView(
                     timelineProvider: LocalTimelineProvider(template: template),
                     delegate: LocalRecordingDelegate(template: template),
-                    recordId: recordId
+                    recordId: recordId,
+                    isUploading: false
                 )
             } else {
                 ProgressView()

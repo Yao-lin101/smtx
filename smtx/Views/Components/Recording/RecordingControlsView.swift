@@ -17,6 +17,7 @@ struct RecordingControlsView: View {
     let onDelete: () -> Void
     let onDismiss: () -> Void
     var onUpload: (() -> Void)?
+    let isUploading: Bool
     
     var body: some View {
         HStack(spacing: 40) {
@@ -57,8 +58,9 @@ struct RecordingControlsView: View {
                     }) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title)
-                            .foregroundColor(.blue)
+                            .foregroundColor(isUploading ? .gray : .blue)
                     }
+                    .disabled(isUploading)
                 }
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.3)

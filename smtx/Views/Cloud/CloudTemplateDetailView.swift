@@ -101,7 +101,10 @@ struct CloudTemplateDetailView: View {
                         }
                     }
                     
-                    TabSectionView(selectedTab: $selectedTab)
+                    TabSectionView(
+                        selectedTab: $selectedTab,
+                        recordings: template.recordings
+                    )
                 }
                 .padding(.vertical)
             } else {
@@ -351,6 +354,7 @@ struct InteractionButtonsView: View {
 
 struct TabSectionView: View {
     @Binding var selectedTab: Int
+    let recordings: [TemplateRecording]
     
     var body: some View {
         VStack {
@@ -363,9 +367,15 @@ struct TabSectionView: View {
             
             Group {
                 if selectedTab == 0 {
-                    VStack {
-                        ForEach(0..<3) { _ in
-                            RecordingRow()
+                    if recordings.isEmpty {
+                        Text("暂无录音")
+                            .foregroundColor(.secondary)
+                            .padding()
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(recordings, id: \.uid) { recording in
+                                RecordingRow(recording: recording)
+                            }
                         }
                     }
                 } else {
@@ -384,11 +394,38 @@ struct TabSectionView: View {
 // MARK: - Supporting Views
 
 struct RecordingRow: View {
+    let recording: TemplateRecording
+    @State private var avatarImage: UIImage?
+    
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            // 用户头像
+            Group {
+                if let image = avatarImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                }
+            }
+            .task {
+                if avatarImage == nil,
+                   let avatarUrl = recording.fullUserAvatar,
+                   let url = URL(string: avatarUrl) {
+                    avatarImage = try? await ImageCacheManager.shared.loadImage(from: url)
+                }
+            }
+            
+            // 用户名和时长
             VStack(alignment: .leading, spacing: 4) {
-                Text("2024年1月1日")
-                Text("1:30")
+                Text(recording.username)
+                    .font(.headline)
+                Text(formatDuration(recording.duration))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -402,6 +439,12 @@ struct RecordingRow: View {
         .background(Color(.systemBackground))
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 1)
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let remainingSeconds = seconds % 60
+        return String(format: "%d:%02d", minutes, remainingSeconds)
     }
 }
 

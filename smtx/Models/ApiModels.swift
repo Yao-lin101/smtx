@@ -153,12 +153,18 @@ struct TemplateComment: Codable, Equatable {
 struct TemplateRecording: Codable, Equatable {
     let uid: String
     let userUid: String
+    let username: String
+    let userAvatar: String?
     let audioFile: String
     let duration: Int
     let createdAt: Date
     
     var fullAudioFile: String {
         APIConfig.shared.mediaURL(audioFile)
+    }
+    
+    var fullUserAvatar: String? {
+        userAvatar.map { APIConfig.shared.mediaURL($0) }
     }
 }
 

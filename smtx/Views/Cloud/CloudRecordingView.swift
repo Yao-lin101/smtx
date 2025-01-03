@@ -26,8 +26,10 @@ struct CloudRecordingView: View {
             timelineProvider: timelineProvider,
             delegate: recordingDelegate,
             onUpload: {
+                guard !isUploading else { return }
                 isUploading = true
-            }
+            },
+            isUploading: isUploading
         )
         .onChange(of: isUploading) { uploading in
             if uploading {
