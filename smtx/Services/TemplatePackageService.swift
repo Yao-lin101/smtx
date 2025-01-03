@@ -12,18 +12,29 @@ enum TemplatePackageError: Error {
 
 class TemplatePackageService {
     
+    private static func getVersionedFileName(baseName: String, version: String) -> String {
+        // 移除文件扩展名
+        let components = baseName.split(separator: ".")
+        let nameWithoutExt = components[0]
+        let ext = components[1]
+        // 添加版本信息并重新组合
+        return "\(nameWithoutExt)_v\(version).\(ext)"
+    }
+    
     /// 创建模板包
     /// - Parameters:
     ///   - coverImage: 原始封面图片数据
     ///   - coverThumbnail: 封面缩略图数据
     ///   - timeline: 时间轴数据
     ///   - timelineImages: 时间轴图片数据字典，key为图片名称
+    ///   - version: 版本号
     /// - Returns: 打包后的数据
     static func createPackage(
         coverImage: Data,
         coverThumbnail: Data,
         timeline: Data,
-        timelineImages: [String: Data]
+        timelineImages: [String: Data],
+        version: String
     ) throws -> Data {
         // 创建临时文件
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
@@ -37,9 +48,14 @@ class TemplatePackageService {
         }
         
         do {
+            // 使用版本化的文件名
+            let coverOriginalName = getVersionedFileName(baseName: "covers_original.jpg", version: version)
+            let coverThumbnailName = getVersionedFileName(baseName: "covers_thumbnails.jpg", version: version)
+            let timelineName = getVersionedFileName(baseName: "timelines.json", version: version)
+            
             // 添加封面图片
             try archive.addEntry(
-                with: "covers_original.jpg",
+                with: coverOriginalName,
                 type: .file,
                 uncompressedSize: Int64(coverImage.count),
                 bufferSize: Int(4096),
@@ -52,7 +68,7 @@ class TemplatePackageService {
             
             // 添加封面缩略图
             try archive.addEntry(
-                with: "covers_thumbnails.jpg",
+                with: coverThumbnailName,
                 type: .file,
                 uncompressedSize: Int64(coverThumbnail.count),
                 bufferSize: Int(4096),
@@ -65,7 +81,7 @@ class TemplatePackageService {
             
             // 添加时间轴数据
             try archive.addEntry(
-                with: "timelines.json",
+                with: timelineName,
                 type: .file,
                 uncompressedSize: Int64(timeline.count),
                 bufferSize: Int(4096),
@@ -155,7 +171,8 @@ class TemplatePackageService {
         coverImage: Data?,
         coverThumbnail: Data?,
         timeline: Data?,
-        timelineImages: [String: Data]?
+        timelineImages: [String: Data]?,
+        version: String
     ) throws -> Data {
         // 创建临时文件
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
@@ -169,10 +186,15 @@ class TemplatePackageService {
         }
         
         do {
-            // 1. 添加封面图片
+            // 使用版本化的文件名
+            let coverOriginalName = getVersionedFileName(baseName: "covers_original.jpg", version: version)
+            let coverThumbnailName = getVersionedFileName(baseName: "covers_thumbnails.jpg", version: version)
+            let timelineName = getVersionedFileName(baseName: "timelines.json", version: version)
+            
+            // 添加封面图片
             if let coverImage = coverImage {
                 try archive.addEntry(
-                    with: "covers_original.jpg",
+                    with: coverOriginalName,
                     type: .file,
                     uncompressedSize: Int64(coverImage.count),
                     bufferSize: Int(4096),
@@ -184,10 +206,10 @@ class TemplatePackageService {
                 )
             }
             
-            // 2. 添加封面缩略图
+            // 添加封面缩略图
             if let coverThumbnail = coverThumbnail {
                 try archive.addEntry(
-                    with: "covers_thumbnails.jpg",
+                    with: coverThumbnailName,
                     type: .file,
                     uncompressedSize: Int64(coverThumbnail.count),
                     bufferSize: Int(4096),
@@ -199,10 +221,10 @@ class TemplatePackageService {
                 )
             }
             
-            // 3. 添加时间轴数据
+            // 添加时间轴数据
             if let timeline = timeline {
                 try archive.addEntry(
-                    with: "timelines.json",
+                    with: timelineName,
                     type: .file,
                     uncompressedSize: Int64(timeline.count),
                     bufferSize: Int(4096),
@@ -214,7 +236,7 @@ class TemplatePackageService {
                 )
             }
             
-            // 4. 添加时间轴图片
+            // 时间轴图片保持原有命名方式
             if let timelineImages = timelineImages {
                 for (imageName, imageData) in timelineImages {
                     try archive.addEntry(

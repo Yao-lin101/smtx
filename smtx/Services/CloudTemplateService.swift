@@ -289,7 +289,8 @@ class CloudTemplateService {
             coverImage: coverImage,
             coverThumbnail: coverThumbnail,
             timeline: timelineData,
-            timelineImages: timelineImages
+            timelineImages: timelineImages,
+            version: template.version ?? "1.0"
         )
         
         // 3. 创建元数据
@@ -484,7 +485,8 @@ class CloudTemplateService {
             coverImage: hasCoverChanges ? coverImage : nil,
             coverThumbnail: coverThumbnail,
             timeline: timelineData,
-            timelineImages: timelineImages
+            timelineImages: timelineImages,
+            version: template.version ?? "1.0"
         )
         print("📦 Created update package: \(packageData.count) bytes")
         
