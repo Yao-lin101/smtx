@@ -77,7 +77,7 @@ class CloudTimelineProvider: TimelineProvider {
         
         // 构建时间轴项目
         var lastImage: Data? = nil
-        self.items = timelineData.events.map { event in
+        self.items = timelineData.events.sorted { $0.time < $1.time }.map { event in
             if let imageName = event.image,
                let imageData = timelineImages[imageName] {
                 lastImage = imageData
@@ -93,22 +93,25 @@ class CloudTimelineProvider: TimelineProvider {
     }
     
     func getItemAt(timestamp: Double) -> TimelineDisplayData? {
+        // 按时间排序事件
+        let sortedEvents = timelineData.events.sorted { $0.time < $1.time }
+        
         // 找到最后一个时间戳小于等于当前时间的项目
-        guard let currentIndex = timelineData.events.lastIndex(where: { $0.time <= timestamp }) else {
+        guard let currentIndex = sortedEvents.lastIndex(where: { $0.time <= timestamp }) else {
             return nil
         }
         
         // 找到最近的一个有图片的项目
         var lastImageData: Data? = nil
         for i in (0...currentIndex).reversed() {
-            if let imageName = timelineData.events[i].image,
+            if let imageName = sortedEvents[i].image,
                let imageData = timelineImages[imageName] {
                 lastImageData = imageData
                 break
             }
         }
         
-        let event = timelineData.events[currentIndex]
+        let event = sortedEvents[currentIndex]
         return TimelineDisplayData(
             script: event.text ?? "",
             imageData: event.image.flatMap { timelineImages[$0] },
