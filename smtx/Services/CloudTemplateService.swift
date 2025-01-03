@@ -563,19 +563,25 @@ class CloudTemplateService {
         return sortedTemplates
     }
     
-    func uploadRecording(templateUid: String, audioData: Data, duration: Double) async throws -> String {
+    func uploadRecording(templateUid: String, audioData: Data, duration: Double, forceOverride: Bool = false) async throws -> String {
         print("🚀 开始上传录音")
         print("  - 模板ID: \(templateUid)")
         print("  - 录音时长: \(duration)秒")
         print("  - 音频大小: \(audioData.count)字节")
+        print("  - 强制覆盖: \(forceOverride)")
         
         let formData = MultipartFormData()
+        
+        // 生成文件名：user_uid + 时间戳
+        let userUid = await UserStore.shared.currentUser?.uid ?? "unknown"
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let fileName = "\(userUid)_\(timestamp).m4a"
         
         // 添加音频文件
         formData.append(
             audioData,
             withName: "audio_file",
-            fileName: "recording.m4a",
+            fileName: fileName,
             mimeType: "audio/mpeg"
         )
         
@@ -586,9 +592,17 @@ class CloudTemplateService {
             withName: "duration"
         )
         
+        // 添加覆盖标志
+        if forceOverride {
+            formData.append(
+                "true".data(using: .utf8)!,
+                withName: "force_override"
+            )
+        }
+        
         print("📤 Sending recording to: \(apiConfig.uploadRecordingURL(templateUid: templateUid))")
         print("  - Duration value:", durationInt)
-        print("  - Form data fields:", ["audio_file", "duration"])
+        print("  - Form data fields:", ["audio_file", "duration", forceOverride ? "force_override" : nil].compactMap { $0 })
         
         let response: RecordingUploadResponse = try await networkService.uploadFormData(
             apiConfig.uploadRecordingURL(templateUid: templateUid),

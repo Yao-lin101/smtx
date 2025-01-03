@@ -357,6 +357,19 @@ class NetworkService {
                 }
             case 401:
                 throw NetworkError.unauthorized
+            case 409:
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    throw NSError(
+                        domain: "NetworkError",
+                        code: 409,
+                        userInfo: [NSLocalizedDescriptionKey: errorResponse.message]
+                    )
+                }
+                throw NSError(
+                    domain: "NetworkError",
+                    code: 409,
+                    userInfo: [NSLocalizedDescriptionKey: "您已经上传过录音"]
+                )
             case 400...499:
                 if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
                     throw NetworkError.serverError(errorResponse.message)
@@ -438,16 +451,55 @@ class UploadProgressDelegateContinuation<T: Decodable>: NSObject, URLSessionData
             return
         }
         
+        // 打印响应数据用于调试
+        print("📦 收到响应: HTTP \(httpResponse.statusCode)")
+        if let jsonString = String(data: receivedData, encoding: .utf8) {
+            print("📄 响应数据: \(jsonString)")
+        }
+        
         switch httpResponse.statusCode {
         case 200...299:
             do {
-                let decoded = try JSONDecoder().decode(T.self, from: receivedData)
+                print("🔄 开始解码数据")
+                print("📝 解码类型: \(T.self)")
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let decoded = try decoder.decode(T.self, from: receivedData)
+                print("✅ 数据解码成功")
                 continuation.resume(returning: decoded)
             } catch {
+                print("❌ 解码错误: \(error)")
+                if let decodingError = error as? DecodingError {
+                    switch decodingError {
+                    case .keyNotFound(let key, let context):
+                        print("  - 缺失键: \(key)")
+                        print("  - 上下文: \(context.debugDescription)")
+                        print("  - 编码路径: \(context.codingPath.map { $0.stringValue })")
+                    case .typeMismatch(let type, let context):
+                        print("  - 类型不匹配: 期望 \(type)")
+                        print("  - 上下文: \(context.debugDescription)")
+                    default:
+                        print("  - 其他解码错误: \(decodingError)")
+                    }
+                }
                 continuation.resume(throwing: NetworkError.decodingError(error))
             }
         case 401:
             continuation.resume(throwing: NetworkError.unauthorized)
+        case 409:
+            if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: receivedData) {
+                continuation.resume(throwing: NSError(
+                    domain: "NetworkError",
+                    code: 409,
+                    userInfo: [NSLocalizedDescriptionKey: errorResponse.message]
+                ))
+            } else {
+                continuation.resume(throwing: NSError(
+                    domain: "NetworkError",
+                    code: 409,
+                    userInfo: [NSLocalizedDescriptionKey: "您已经上传过录音"]
+                ))
+            }
         case 400...499:
             if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: receivedData) {
                 continuation.resume(throwing: NetworkError.serverError(errorResponse.message))

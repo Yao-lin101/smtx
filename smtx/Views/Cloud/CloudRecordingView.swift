@@ -8,6 +8,8 @@ struct CloudRecordingView: View {
     let onSuccess: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var isUploading = false
+    @State private var showingOverrideAlert = false
+    @State private var pendingRecordingData: (Data, Double)?
     
     private let timelineProvider: CloudTimelineProvider
     private let recordingDelegate: CloudRecordingDelegate
@@ -38,17 +40,51 @@ struct CloudRecordingView: View {
                         let message = try await recordingDelegate.uploadRecording()
                         await MainActor.run {
                             isUploading = false
+                            pendingRecordingData = nil
                             onSuccess(message)
                             dismiss()
                         }
-                    } catch {
+                    } catch let error as NSError {
                         await MainActor.run {
+                            if error.domain == "NetworkError" && error.code == 409 {
+                                if let recordingData = recordingDelegate.recordingData {
+                                    pendingRecordingData = recordingData
+                                    showingOverrideAlert = true
+                                }
+                            } else {
+                                ToastManager.shared.show(error.localizedDescription, type: .error)
+                            }
                             isUploading = false
-                            ToastManager.shared.show(error.localizedDescription, type: .error)
                         }
                     }
                 }
             }
+        }
+        .alert("已存在录音", isPresented: $showingOverrideAlert) {
+            Button("覆盖", role: .destructive) {
+                if let (_, _) = pendingRecordingData {
+                    Task {
+                        do {
+                            let message = try await recordingDelegate.uploadRecording(forceOverride: true)
+                            await MainActor.run {
+                                pendingRecordingData = nil
+                                onSuccess(message)
+                                dismiss()
+                            }
+                        } catch {
+                            await MainActor.run {
+                                pendingRecordingData = nil
+                                ToastManager.shared.show(error.localizedDescription, type: .error)
+                            }
+                        }
+                    }
+                }
+            }
+            Button("取消", role: .cancel) {
+                pendingRecordingData = nil
+            }
+        } message: {
+            Text("您已经上传过录音，是否要覆盖现有录音？")
         }
         .toastManager()
     }

@@ -80,8 +80,12 @@ class LocalRecordingDelegate: RecordingDelegate {
 
 class CloudRecordingDelegate: RecordingDelegate {
     private let templateUid: String
-    private var recordingData: (audioData: Data, duration: Double)?
+    private var _recordingData: (audioData: Data, duration: Double)?
     private let cloudTemplateService: CloudTemplateService
+    
+    var recordingData: (Data, Double)? {
+        _recordingData
+    }
     
     init(templateUid: String, cloudTemplateService: CloudTemplateService = .shared) {
         self.templateUid = templateUid
@@ -94,7 +98,7 @@ class CloudRecordingDelegate: RecordingDelegate {
         let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(recordId).m4a")
         try audioData.write(to: cacheURL)
         // 保存录音数据以供上传使用
-        recordingData = (audioData, duration)
+        _recordingData = (audioData, duration)
         return recordId
     }
     
@@ -102,7 +106,7 @@ class CloudRecordingDelegate: RecordingDelegate {
         // 从缓存中删除
         let cacheURL = FileManager.default.temporaryDirectory.appendingPathComponent("cloud_recording_\(id).m4a")
         try? FileManager.default.removeItem(at: cacheURL)
-        recordingData = nil
+        _recordingData = nil
     }
     
     func loadRecording(id: String) async throws -> (Data, Double)? {
@@ -115,11 +119,36 @@ class CloudRecordingDelegate: RecordingDelegate {
         return (audioData, player.duration)
     }
     
-    func uploadRecording() async throws -> String {
-        guard let (audioData, duration) = recordingData else {
+    func uploadRecording(forceOverride: Bool = false) async throws -> String {
+        guard let (audioData, duration) = _recordingData else {
             throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "没有可上传的录音"])
         }
         
-        return try await cloudTemplateService.uploadRecording(templateUid: templateUid, audioData: audioData, duration: duration)
+        do {
+            return try await cloudTemplateService.uploadRecording(
+                templateUid: templateUid,
+                audioData: audioData,
+                duration: duration,
+                forceOverride: forceOverride
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                if message.contains("409") || message.contains("已存在录音") {
+                    throw NSError(
+                        domain: "NetworkError",
+                        code: 409,
+                        userInfo: [NSLocalizedDescriptionKey: "您已经上传过录音"]
+                    )
+                }
+                throw error
+            default:
+                throw error
+            }
+        }
+    }
+    
+    func uploadRecording() async throws -> String {
+        return try await uploadRecording(forceOverride: false)
     }
 }
