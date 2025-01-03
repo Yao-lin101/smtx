@@ -39,6 +39,11 @@ class TemplatePackageService {
         // 创建临时文件
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
         
+        // 确保在函数返回时删除临时文件
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+        
         // 创建 ZIP 文件
         let archive: Archive
         do {
@@ -176,6 +181,11 @@ class TemplatePackageService {
     ) throws -> Data {
         // 创建临时文件
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
+        
+        // 确保在函数返回时删除临时文件
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
         
         // 创建 ZIP 文件
         let archive: Archive
