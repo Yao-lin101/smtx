@@ -429,4 +429,26 @@ class CloudTemplateViewModel: ObservableObject {
         // 重新加载模板数据以更新录音列表
         loadTemplate(templateUid)
     }
+    
+    // MARK: - Comment Management
+    
+    func addComment(templateUid: String, content: String) async throws {
+        do {
+            try await service.addComment(templateUid: templateUid, content: content)
+            // 重新加载模板以获取最新评论
+            loadTemplate(templateUid)
+        } catch {
+            throw error
+        }
+    }
+    
+    func deleteComment(templateUid: String, commentId: Int) async throws {
+        do {
+            try await service.deleteComment(templateUid: templateUid, commentId: commentId)
+            // 重新加载模板以更新评论列表
+            loadTemplate(templateUid)
+        } catch {
+            throw error
+        }
+    }
 } 

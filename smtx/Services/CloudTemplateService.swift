@@ -618,4 +618,45 @@ class CloudTemplateService {
             apiConfig.templateRecordingURL(templateUid: templateUid, recordingId: recordingUid)
         )
     }
+    
+    // MARK: - Comment Management
+    
+    func addComment(templateUid: String, content: String) async throws {
+        do {
+            let _: EmptyBody = try await networkService.postDictionary(
+                apiConfig.templateCommentsURL(uid: templateUid),
+                body: ["content": content]
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw TemplateError.serverError(message)
+            case .unauthorized:
+                throw TemplateError.unauthorized
+            case .networkError(let error):
+                throw TemplateError.networkError(error.localizedDescription)
+            default:
+                throw TemplateError.operationFailed("发表评论失败")
+            }
+        }
+    }
+    
+    func deleteComment(templateUid: String, commentId: Int) async throws {
+        do {
+            let _: EmptyBody = try await networkService.delete(
+                apiConfig.templateCommentURL(templateUid: templateUid, commentId: commentId)
+            )
+        } catch let error as NetworkError {
+            switch error {
+            case .serverError(let message):
+                throw TemplateError.serverError(message)
+            case .unauthorized:
+                throw TemplateError.unauthorized
+            case .networkError(let error):
+                throw TemplateError.networkError(error.localizedDescription)
+            default:
+                throw TemplateError.operationFailed("删除评论失败")
+            }
+        }
+    }
 }

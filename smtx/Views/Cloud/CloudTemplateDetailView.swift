@@ -8,6 +8,8 @@ struct CloudTemplateDetailView: View {
     @State private var timelineData: TimelineData?
     @State private var timelineImages: [String: Data] = [:]
     @State private var showingRecordingSheet = false
+    @State private var showingCommentSheet = false
+    @State private var newComment = ""
     
     var body: some View {
         ScrollView {
@@ -62,7 +64,7 @@ struct CloudTemplateDetailView: View {
                         switch selectedTab {
                         case 1: // 评论标签页
                             Button(action: {
-                                // TODO: 实现评论功能
+                                showingCommentSheet = true
                             }) {
                                 HStack {
                                     Image(systemName: "bubble.left.circle.fill")
@@ -120,6 +122,49 @@ struct CloudTemplateDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingRecordingSheet) {
             recordingSheet
+        }
+        .sheet(isPresented: $showingCommentSheet) {
+            NavigationView {
+                VStack {
+                    TextEditor(text: $newComment)
+                        .frame(height: 100)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        .padding()
+                    
+                    Text("\(newComment.count)/100")
+                        .font(.caption)
+                        .foregroundColor(newComment.count > 100 ? .red : .secondary)
+                        .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .navigationTitle("发表评论")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") {
+                            showingCommentSheet = false
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("发送") {
+                            Task {
+                                do {
+                                    try await viewModel.addComment(templateUid: uid, content: String(newComment.prefix(100)))
+                                    showingCommentSheet = false
+                                    newComment = ""
+                                } catch {
+                                    ToastManager.shared.show(error.localizedDescription, type: .error)
+                                }
+                            }
+                        }
+                        .disabled(newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || newComment.count > 100)
+                    }
+                }
+            }
+            .padding(.horizontal)
         }
         .onAppear {
             print("🔄 视图出现，加载模板: \(uid)")
@@ -364,6 +409,8 @@ struct TabSectionView: View {
     let timelineImages: [String: Data]
     let templateUid: String
     @EnvironmentObject private var viewModel: CloudTemplateViewModel
+    @State private var showingCommentSheet = false
+    @State private var newComment = ""
     
     var body: some View {
         VStack {
@@ -394,10 +441,65 @@ struct TabSectionView: View {
                         }
                     }
                 } else {
-                    VStack {
-                        ForEach(0..<3) { _ in
-                            CommentRow()
+                    if let template = viewModel.selectedTemplate {
+                        if template.comments.isEmpty {
+                            Text("暂无评论")
+                                .foregroundColor(.secondary)
+                                .padding()
+                        } else {
+                            ScrollView {
+                                VStack(spacing: 8) {
+                                    ForEach(template.comments, id: \.id) { comment in
+                                        CommentRow(comment: comment)
+                                    }
+                                }
+                            }
                         }
+                    } else {
+                        ProgressView()
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
+        .sheet(isPresented: $showingCommentSheet) {
+            NavigationView {
+                VStack {
+                    TextEditor(text: $newComment)
+                        .frame(height: 100)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        .padding()
+                    
+                    Text("\(newComment.count)/100")
+                        .font(.caption)
+                        .foregroundColor(newComment.count > 100 ? .red : .secondary)
+                        .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .navigationTitle("发表评论")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") {
+                            showingCommentSheet = false
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("发送") {
+                            Task {
+                                do {
+                                    try await viewModel.addComment(templateUid: templateUid, content: String(newComment.prefix(100)))
+                                    showingCommentSheet = false
+                                    newComment = ""
+                                } catch {
+                                    ToastManager.shared.show(error.localizedDescription, type: .error)
+                                }
+                            }
+                        }
+                        .disabled(newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || newComment.count > 100)
                     }
                 }
             }
@@ -511,29 +613,69 @@ struct RecordingRow: View {
 }
 
 struct CommentRow: View {
+    let comment: TemplateComment
+    @State private var avatarImage: UIImage?
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Circle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 32, height: 32)
+                // 用户头像
+                Group {
+                    if let image = avatarImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 32, height: 32)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(width: 32, height: 32)
+                    }
+                }
+                .task {
+                    if avatarImage == nil,
+                       let avatarUrl = comment.fullUserAvatar,
+                       let url = URL(string: avatarUrl) {
+                        avatarImage = try? await ImageCacheManager.shared.loadImage(from: url)
+                    }
+                }
                 
-                Text("用户名")
+                Text(comment.username)
                     .font(.headline)
                 
                 Spacer()
                 
-                Text("1分钟前")
+                Text(formatTime(comment.createdAt))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
-            Text("这是一条示例评论")
+            Text(comment.content)
                 .font(.body)
         }
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(8)
+    }
+    
+    private func formatTime(_ date: Date) -> String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.minute, .hour, .day], from: date, to: now)
+        
+        if let minutes = components.minute, minutes < 60 {
+            return "\(minutes)分钟前"
+        } else if let hours = components.hour, hours < 24 {
+            return "\(hours)小时前"
+        } else if let days = components.day, days < 30 {
+            return "\(days)天前"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            formatter.locale = Locale(identifier: "zh_CN")
+            return formatter.string(from: date)
+        }
     }
 }
 

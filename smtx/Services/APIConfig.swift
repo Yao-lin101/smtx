@@ -49,8 +49,11 @@ struct APIConfig {
     } 
     
     // Template Comments URLs
-    func templateCommentsURL(templateUid: String) -> String { return "\(baseURL)/templates/\(templateUid)/comments/" }
-    func templateCommentURL(templateUid: String, commentId: String) -> String { 
+    func templateCommentsURL(uid: String) -> String { 
+        return "\(baseURL)/templates/\(uid)/comments/" 
+    }
+    
+    func templateCommentURL(templateUid: String, commentId: Int) -> String { 
         return "\(baseURL)/templates/\(templateUid)/comments/\(commentId)/" 
     }
     

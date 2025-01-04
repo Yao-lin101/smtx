@@ -139,14 +139,13 @@ struct CloudTemplateListResponse: Codable {
 struct TemplateComment: Codable, Equatable {
     let id: Int
     let userUid: String
+    let username: String
+    let userAvatar: String?
     let content: String
     let createdAt: Date
     
-    enum CodingKeys: String, CodingKey {
-        case id
-        case userUid = "user_uid"
-        case content
-        case createdAt = "created_at"
+    var fullUserAvatar: String? {
+        userAvatar.map { APIConfig.shared.mediaURL($0) }
     }
 }
 
