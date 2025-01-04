@@ -432,23 +432,15 @@ class CloudTemplateViewModel: ObservableObject {
     
     // MARK: - Comment Management
     
+    @MainActor
     func addComment(templateUid: String, content: String) async throws {
-        do {
-            try await service.addComment(templateUid: templateUid, content: content)
-            // 重新加载模板以获取最新评论
-            loadTemplate(templateUid)
-        } catch {
-            throw error
-        }
+        try await CloudTemplateService.shared.addComment(templateUid: templateUid, content: content)
+        loadTemplate(templateUid)
     }
     
+    @MainActor
     func deleteComment(templateUid: String, commentId: Int) async throws {
-        do {
-            try await service.deleteComment(templateUid: templateUid, commentId: commentId)
-            // 重新加载模板以更新评论列表
-            loadTemplate(templateUid)
-        } catch {
-            throw error
-        }
+        try await CloudTemplateService.shared.deleteComment(templateUid: templateUid, commentId: commentId)
+        loadTemplate(templateUid)
     }
 } 

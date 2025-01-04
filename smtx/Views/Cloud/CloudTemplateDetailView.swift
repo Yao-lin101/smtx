@@ -615,6 +615,8 @@ struct RecordingRow: View {
 struct CommentRow: View {
     let comment: TemplateComment
     @State private var avatarImage: UIImage?
+    @State private var showingDeleteAlert = false
+    @EnvironmentObject private var viewModel: CloudTemplateViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -646,6 +648,16 @@ struct CommentRow: View {
                 
                 Spacer()
                 
+                if let template = viewModel.selectedTemplate,
+                   comment.userUid == UserStore.shared.currentUser?.uid || template.authorUid == UserStore.shared.currentUser?.uid {
+                    Button(role: .destructive) {
+                        showingDeleteAlert = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                    }
+                }
+                
                 Text(formatTime(comment.createdAt))
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -657,6 +669,22 @@ struct CommentRow: View {
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(8)
+        .alert("删除评论", isPresented: $showingDeleteAlert) {
+            Button("取消", role: .cancel) {}
+            Button("删除", role: .destructive) {
+                Task {
+                    do {
+                        if let template = viewModel.selectedTemplate {
+                            try await viewModel.deleteComment(templateUid: template.uid, commentId: comment.id)
+                        }
+                    } catch {
+                        ToastManager.shared.show(error.localizedDescription, type: .error)
+                    }
+                }
+            }
+        } message: {
+            Text("确定要删除这条评论吗？")
+        }
     }
     
     private func formatTime(_ date: Date) -> String {
